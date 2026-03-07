@@ -1,0 +1,29 @@
+model:
+  type: xgboost
+  params:
+    n_estimators: 200
+    max_depth: 6
+    learning_rate: 0.1
+    subsample: 0.8
+    colsample_bytree: 0.8
+    min_child_weight: 1
+    gamma: 0
+    reg_alpha: 0
+    reg_lambda: 1
+    objective: "multi:softprob"
+    num_class: 3
+    eval_metric: "mlogloss"
+    # Hinweis: class_weight wird durch sample_weight im fit() ersetzt
+
+validation:
+  strategy: stratified_kfold
+  n_splits: 5
+  shuffle: true
+
+random_state: 42
+
+# Metriken für Evaluation
+target_metrics:
+  flop_recall_min: 0.50    # Aktuell: 0.26
+  hit_recall_min: 0.80     # Aktuell: 0.93
+  balanced_accuracy_min: 0.65  # Aktuell: 0.625

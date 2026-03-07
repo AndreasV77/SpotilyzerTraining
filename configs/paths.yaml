@@ -1,0 +1,26 @@
+# Pfad-Konfiguration für SpotilyzerTraining
+# 
+# WICHTIG: Preview-Dateien NICHT im Repository speichern!
+# Sie sind zu groß (~2-3 GB) und gehören nicht in Git.
+
+paths:
+  # Preview-Dateien (30-Sekunden-MP3s von Deezer)
+  # Beispiel: "D:/Data/SpotilyzerPreviews" oder "G:/ML-Data/Spotilyzer/previews"
+  previews: "D:/Data/SpotilyzerPreviews"
+  
+  # Scouting-Ergebnisse (CSVs)
+  scout_results: "./data"
+  
+  # MERT-Embeddings (können im Repo bleiben, ~50-100 MB)
+  embeddings: "./outputs/embeddings"
+  
+  # Trainierte Modelle
+  models: "./outputs/models"
+  
+  # Reports und Logs
+  reports: "./outputs/reports"
+  logs: "./logs"
+  
+  # Hauptprojekt-Pfad (für Model-Deployment)
+  main_project: "../Spotilyzer"
+  main_project_models: "../Spotilyzer/models"

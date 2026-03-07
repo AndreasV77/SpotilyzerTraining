@@ -1,0 +1,23 @@
+deezer:
+  hit_threshold: 700000
+  flop_threshold: 300000
+
+lastfm:
+  # ACHTUNG: Diese Werte sind Schätzungen!
+  # Nach erstem Enrichment anhand der tatsächlichen Verteilung kalibrieren.
+  hit_playcount: 5000000
+  hit_listeners: 500000
+  flop_playcount: 500000
+  flop_listeners: 50000
+
+sample_weights:
+  validated: 1.0       # Beide Quellen einig
+  single_source: 0.5   # Nur Deezer verfügbar
+  contested: 0.7       # Quellen widersprechen sich
+
+composite_score:
+  # Multiplikatoren für UI-Darstellung
+  robustness_factors:
+    validated: 1.0
+    single_source: 0.85
+    contested: 0.7
