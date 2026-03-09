@@ -22,10 +22,20 @@ data/*.npy
 # Outputs
 outputs/models/*.joblib
 outputs/reports/*.json
+outputs/embeddings/
+
+# Logs (Laufzeit-Logs, nicht in Git)
+logs/
+
+# Claude Code Metadaten
+.claude/
 
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb_checkpoints
+
+# Backup-Ordner
+!BU/
 
 # OS
 .DS_Store
