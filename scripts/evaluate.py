@@ -1,0 +1,382 @@
+"""
+evaluate.py
+===========
+Standalone-Evaluation eines trainierten Modells.
+
+Laedt ein gespeichertes .joblib-Modell und evaluiert es gegen
+tracks.jsonl + Embeddings. Generiert detaillierte Metriken,
+Confusion Matrix und vergleicht gegen Ziel-Metriken.
+
+Input:
+  - outputs/models/spotilyzer_model.joblib
+  - outputs/embeddings/embeddings.npy + embeddings_meta.csv
+  - metadata/tracks.jsonl (Labels + Robustheit)
+
+Output:
+  - outputs/reports/evaluation_report.json
+  - Konsolenausgabe mit detaillierten Metriken
+"""
+
+import sys
+import json
+import argparse
+from pathlib import Path
+from datetime import datetime
+
+import numpy as np
+import pandas as pd
+from sklearn.metrics import (
+    classification_report,
+    confusion_matrix,
+    accuracy_score,
+    f1_score,
+    balanced_accuracy_score,
+)
+import joblib
+
+from _utils import (
+    setup_logging,
+    load_paths_config,
+    load_training_config,
+    load_thresholds_config,
+    ensure_dir,
+)
+from utils.metadata import read_tracks_as_dict, get_tracks_jsonl_path
+
+# Logger (wird in main() initialisiert)
+logger = None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DATEN LADEN
+# ══════════════════════════════════════════════════════════════════════════════
+
+def load_model(model_path: Path) -> dict:
+    """Laedt das gespeicherte Modell-Bundle."""
+    print(f"  Lade Modell: {model_path}")
+    bundle = joblib.load(model_path)
+    print(f"    Typ: {type(bundle['model']).__name__}")
+    print(f"    Embedding-Dim: {bundle.get('embedding_dim', '?')}")
+    return bundle
+
+
+def load_evaluation_data(
+    embeddings_dir: Path,
+    jsonl_path: Path,
+    sample_weights_cfg: dict,
+) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
+    """
+    Laedt Embeddings + Labels aus tracks.jsonl fuer Evaluation.
+
+    Returns:
+        (X, sample_weights, merged_df)
+    """
+    embeddings = np.load(embeddings_dir / "embeddings.npy")
+    meta_df = pd.read_csv(embeddings_dir / "embeddings_meta.csv")
+    tracks_dict = read_tracks_as_dict(jsonl_path)
+
+    labels = []
+    robustness_list = []
+    weights = []
+    valid_mask = []
+
+    for _, row in meta_df.iterrows():
+        tid = int(row["track_id"])
+        track = tracks_dict.get(tid, {})
+        label = track.get("label")
+        robustness = track.get("robustness", "single_source")
+
+        if label is not None:
+            labels.append(label)
+            robustness_list.append(robustness)
+            weights.append(sample_weights_cfg.get(robustness, 0.5))
+            valid_mask.append(True)
+        else:
+            valid_mask.append(False)
+
+    valid_mask = np.array(valid_mask)
+    valid_indices = meta_df.loc[valid_mask, "embedding_idx"].values
+    X = embeddings[valid_indices]
+    sample_weights = np.array(weights, dtype=np.float32)
+
+    merged = meta_df[valid_mask].copy()
+    merged["label"] = labels
+    merged["robustness"] = robustness_list
+    merged["sample_weight"] = sample_weights
+
+    return X, sample_weights, merged
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# EVALUATION
+# ══════════════════════════════════════════════════════════════════════════════
+
+def evaluate_model(
+    model,
+    label_encoder,
+    X: np.ndarray,
+    labels: np.ndarray,
+    sample_weights: np.ndarray = None,
+) -> dict:
+    """Fuehrt vollstaendige Evaluation durch."""
+    y = label_encoder.transform(labels)
+    y_pred = model.predict(X)
+    y_pred_proba = model.predict_proba(X)
+
+    # Basis-Metriken
+    metrics = {
+        "accuracy": float(accuracy_score(y, y_pred)),
+        "balanced_accuracy": float(balanced_accuracy_score(y, y_pred)),
+        "f1_macro": float(f1_score(y, y_pred, average="macro")),
+        "f1_weighted": float(f1_score(y, y_pred, average="weighted")),
+    }
+
+    # Confusion Matrix
+    cm = confusion_matrix(y, y_pred)
+    metrics["confusion_matrix"] = cm.tolist()
+
+    # Per-Class Metrics
+    report = classification_report(
+        y, y_pred,
+        target_names=["flop", "mid", "hit"],
+        output_dict=True,
+    )
+    metrics["per_class"] = {}
+    for cls in ["flop", "mid", "hit"]:
+        metrics["per_class"][cls] = {
+            "precision": float(report[cls]["precision"]),
+            "recall": float(report[cls]["recall"]),
+            "f1": float(report[cls]["f1-score"]),
+            "support": int(report[cls]["support"]),
+        }
+
+    # Prediction-Confidence-Statistiken
+    max_proba = y_pred_proba.max(axis=1)
+    metrics["confidence_stats"] = {
+        "mean": float(max_proba.mean()),
+        "median": float(np.median(max_proba)),
+        "min": float(max_proba.min()),
+        "max": float(max_proba.max()),
+    }
+
+    # Per-Robustness Evaluation
+    if sample_weights is not None:
+        robustness_metrics = {}
+        for weight_val, rob_name in [(1.0, "validated"), (0.5, "single_source"), (0.7, "contested")]:
+            mask = np.isclose(sample_weights, weight_val, atol=0.05)
+            if mask.sum() > 0:
+                rob_acc = float(balanced_accuracy_score(y[mask], y_pred[mask]))
+                robustness_metrics[rob_name] = {
+                    "balanced_accuracy": rob_acc,
+                    "count": int(mask.sum()),
+                }
+        metrics["per_robustness"] = robustness_metrics
+
+    return metrics
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# REPORTING
+# ══════════════════════════════════════════════════════════════════════════════
+
+def print_evaluation_report(metrics: dict, target_metrics: dict = None):
+    """Gibt detaillierten Evaluations-Report aus."""
+
+    print(f"\n{'=' * 79}")
+    print(f"  EVALUATION REPORT")
+    print(f"{'=' * 79}")
+
+    print(f"\n  Overall Metrics:")
+    print(f"    Accuracy:          {metrics['accuracy']:.3f}")
+    print(f"    Balanced Accuracy: {metrics['balanced_accuracy']:.3f}")
+    print(f"    F1 (macro):        {metrics['f1_macro']:.3f}")
+    print(f"    F1 (weighted):     {metrics['f1_weighted']:.3f}")
+
+    print(f"\n  Per-Class Performance:")
+    print(f"    {'Class':8} {'Precision':>10} {'Recall':>10} {'F1':>10} {'Support':>10}")
+    print(f"    {'-' * 48}")
+    for cls in ["flop", "mid", "hit"]:
+        m = metrics["per_class"][cls]
+        print(f"    {cls:8} {m['precision']:>10.3f} {m['recall']:>10.3f} {m['f1']:>10.3f} {m['support']:>10}")
+
+    print(f"\n  Confusion Matrix:")
+    print(f"    {'':8} {'flop':>8} {'mid':>8} {'hit':>8}  <- predicted")
+    cm = metrics["confusion_matrix"]
+    for i, cls in enumerate(["flop", "mid", "hit"]):
+        row = f"    {cls:8}"
+        for j in range(3):
+            row += f" {cm[i][j]:>7}"
+        print(row)
+    print(f"    ^ actual")
+
+    # Confidence-Statistiken
+    if "confidence_stats" in metrics:
+        cs = metrics["confidence_stats"]
+        print(f"\n  Prediction Confidence:")
+        print(f"    Mean:   {cs['mean']:.3f}")
+        print(f"    Median: {cs['median']:.3f}")
+        print(f"    Min:    {cs['min']:.3f}")
+        print(f"    Max:    {cs['max']:.3f}")
+
+    # Per-Robustness
+    if "per_robustness" in metrics:
+        print(f"\n  Per-Robustness Balanced Accuracy:")
+        for rob, data in metrics["per_robustness"].items():
+            print(f"    {rob:15}: {data['balanced_accuracy']:.3f}  (n={data['count']})")
+
+    # Target-Vergleich
+    if target_metrics:
+        print(f"\n{'─' * 79}")
+        print(f"  ZIEL-VERGLEICH")
+        print(f"{'─' * 79}")
+
+        flop_recall = metrics["per_class"]["flop"]["recall"]
+        hit_recall = metrics["per_class"]["hit"]["recall"]
+        ba = metrics["balanced_accuracy"]
+
+        flop_target = target_metrics.get("flop_recall_min", 0.5)
+        hit_target = target_metrics.get("hit_recall_min", 0.8)
+        ba_target = target_metrics.get("balanced_accuracy_min", 0.65)
+
+        def status(val, target):
+            return "OK" if val >= target else "MISS"
+
+        print(f"    {'Metrik':25} {'Aktuell':>10} {'Ziel':>10} {'Status':>10}")
+        print(f"    {'-' * 55}")
+        print(f"    {'Flop Recall':25} {flop_recall:>10.3f} {'>=' + str(flop_target):>10} {status(flop_recall, flop_target):>10}")
+        print(f"    {'Hit Recall':25} {hit_recall:>10.3f} {'>=' + str(hit_target):>10} {status(hit_recall, hit_target):>10}")
+        print(f"    {'Balanced Accuracy':25} {ba:>10.3f} {'>=' + str(ba_target):>10} {status(ba, ba_target):>10}")
+
+        all_ok = (flop_recall >= flop_target and hit_recall >= hit_target and ba >= ba_target)
+        print(f"\n    Gesamt: {'ALLE ZIELE ERREICHT' if all_ok else 'ZIELE NOCH NICHT ERREICHT'}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MAIN
+# ══════════════════════════════════════════════════════════════════════════════
+
+def main():
+    global logger
+
+    paths = load_paths_config()
+    training_cfg = load_training_config()
+    thresholds_cfg = load_thresholds_config()
+
+    metadata_dir = paths.get("metadata")
+    jsonl_path = get_tracks_jsonl_path(metadata_dir)
+    default_model = str(paths.get("models", "./outputs/models") / "spotilyzer_model.joblib")
+    default_embeddings = str(paths.get("embeddings", "./outputs/embeddings"))
+
+    parser = argparse.ArgumentParser(
+        description="Evaluiere trainiertes Spotilyzer-Modell"
+    )
+    parser.add_argument(
+        "--model",
+        default=default_model,
+        help=f"Pfad zum .joblib-Modell (default: {default_model})"
+    )
+    parser.add_argument(
+        "--embeddings-dir",
+        default=default_embeddings,
+        help=f"Verzeichnis mit Embeddings (default: {default_embeddings})"
+    )
+    parser.add_argument(
+        "--save-report",
+        action="store_true",
+        help="Speichere Report als JSON"
+    )
+    args = parser.parse_args()
+
+    # Logging
+    logger = setup_logging("evaluation", log_dir=paths.get("logs"))
+
+    print(f"{'=' * 79}")
+    print(f"  SPOTILYZER MODEL EVALUATION")
+    print(f"{'=' * 79}")
+
+    model_path = Path(args.model)
+    embeddings_dir = Path(args.embeddings_dir)
+
+    # Pruefen
+    if not model_path.exists():
+        print(f"  Fehler: Modell nicht gefunden: {model_path}")
+        logger.error(f"Modell nicht gefunden: {model_path}")
+        sys.exit(1)
+
+    if not (embeddings_dir / "embeddings.npy").exists():
+        print(f"  Fehler: Embeddings nicht gefunden: {embeddings_dir}")
+        logger.error(f"Embeddings nicht gefunden: {embeddings_dir}")
+        sys.exit(1)
+
+    if not jsonl_path.exists():
+        print(f"  Fehler: tracks.jsonl nicht gefunden: {jsonl_path}")
+        logger.error(f"tracks.jsonl nicht gefunden: {jsonl_path}")
+        sys.exit(1)
+
+    # Sample-Weights aus thresholds.yaml
+    sample_weights_cfg = thresholds_cfg.get("sample_weights", {
+        "validated": 1.0,
+        "single_source": 0.5,
+        "contested": 0.7,
+    })
+
+    # Modell laden
+    bundle = load_model(model_path)
+    model = bundle["model"]
+    label_encoder = bundle["label_encoder"]
+
+    # Daten laden
+    print(f"\n  Lade Evaluations-Daten...")
+    X, sample_weights, merged_df = load_evaluation_data(
+        embeddings_dir, jsonl_path, sample_weights_cfg,
+    )
+    print(f"    Samples: {X.shape[0]}")
+    print(f"    Features: {X.shape[1]}")
+
+    # Evaluation
+    print(f"\n{'─' * 79}")
+    print(f"  EVALUATION")
+    print(f"{'─' * 79}")
+
+    metrics = evaluate_model(
+        model, label_encoder,
+        X, merged_df["label"].values,
+        sample_weights,
+    )
+
+    target_metrics = training_cfg.get("target_metrics", {})
+    print_evaluation_report(metrics, target_metrics)
+
+    # Report speichern
+    if args.save_report:
+        reports_dir = ensure_dir(paths.get("reports", Path("./outputs/reports")))
+        report = {
+            "created": datetime.now().isoformat(),
+            "model_path": str(model_path),
+            "dataset": {
+                "n_samples": int(X.shape[0]),
+                "label_distribution": {k: int(v) for k, v in merged_df["label"].value_counts().items()},
+                "robustness_distribution": {k: int(v) for k, v in merged_df["robustness"].value_counts().items()},
+            },
+            "metrics": metrics,
+            "target_metrics": target_metrics,
+        }
+
+        report_path = reports_dir / "evaluation_report.json"
+        with open(report_path, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, ensure_ascii=False)
+        print(f"\n  Report gespeichert: {report_path}")
+        logger.info(f"Evaluation Report gespeichert: {report_path}")
+
+    logger.info(
+        f"Evaluation abgeschlossen: BA={metrics['balanced_accuracy']:.3f}, "
+        f"Flop-Recall={metrics['per_class']['flop']['recall']:.3f}"
+    )
+
+    print(f"\n{'─' * 79}")
+    print(f"  DONE")
+    print(f"{'─' * 79}")
+
+
+if __name__ == "__main__":
+    main()

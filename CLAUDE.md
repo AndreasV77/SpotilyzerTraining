@@ -3,6 +3,7 @@
 Arbeitsdokument für das Modell-Training-Subprojekt von Spotilyzer.
 
 **Erstellt:** 2026-03-07
+**Zuletzt aktualisiert:** 2026-03-08 (JSONL-Refactoring + 7 neue Genre-Cluster)
 
 ---
 
@@ -64,7 +65,95 @@ Verbesserung des Hit/Mid/Flop-Klassifikators für Spotilyzer. Das Hauptproblem: 
 
 ---
 
-## Verzeichnisstruktur
+## Datenstruktur (SpotilyzerData)
+
+**Speicherort:** `G:/Dev/SpotilyzerData` (außerhalb des Repos, zu groß für Git)
+
+```
+G:/Dev/SpotilyzerData/
+├── previews/                      # Audio-Dateien
+│   ├── 00/ ... ff/                # MD5-Hash-Sharding (256 Ordner)
+│   │   └── {track_id}.mp3         # Deezer-ID als Dateiname
+│   └── ...
+│
+├── metadata/
+│   └── tracks.jsonl               # Eine Zeile pro Track (alle Metadaten)
+│
+└── playlists/                     # Bei Bedarf generierte M3U8-Playlists
+    └── *.m3u8
+```
+
+### Preview-Dateien
+
+**Dateiname:** `{deezer_track_id}.mp3` (z.B. `3770028292.mp3`)
+
+**WICHTIG:** Cluster-Zuordnung ist NICHT im Dateinamen! Ein Track kann mehreren Clustern angehören (z.B. ein Metal-Track der auch in den Charts ist). Cluster-Info nur in `tracks.jsonl`.
+
+**Ordner-Sharding:** MD5-Hash der Track-ID (erste 2 Zeichen)
+
+```python
+import hashlib
+
+def get_shard_dir(track_id: int) -> str:
+    """Berechnet Shard-Verzeichnis aus Track-ID."""
+    h = hashlib.md5(str(track_id).encode()).hexdigest()
+    return h[:2]
+
+def get_preview_path(track_id: int, base_path: str = "G:/Dev/SpotilyzerData/previews") -> str:
+    """Vollständiger Pfad zu einer Preview-Datei."""
+    shard = get_shard_dir(track_id)
+    return f"{base_path}/{shard}/{track_id}.mp3"
+
+# Beispiele:
+# 3770028292 → previews/a7/3770028292.mp3
+# 1234567    → previews/e1/1234567.mp3
+```
+
+**ID3-Tags (beim Download gesetzt):**
+- `TIT2` — Title
+- `TPE1` — Artist
+- `TALB` — Album
+- `COMM` — Comment: `deezer:{track_id}|clusters:{cluster1,cluster2}`
+
+**Dependency:** `mutagen` für ID3-Tagging
+
+### Metadaten (tracks.jsonl)
+
+Eine JSON-Zeile pro Track. **Primärschlüssel:** `track_id` (Deezer Track-ID)
+
+```jsonl
+{"track_id": 3770028292, "title": "Song Name", "artist": "Artist Name", "album": "Album", "clusters": ["rock", "charts_us"], "deezer_rank": 895000, "lastfm_playcount": 12500000, "lastfm_listeners": 450000, "lastfm_tags": ["rock", "alternative"], "file_path": "previews/a7/3770028292.mp3", "label": "hit", "robustness": "validated"}
+```
+
+**Pflichtfelder:**
+- `track_id` — Deezer Track-ID (Primärschlüssel)
+- `title`, `artist`, `album` — Metadaten
+- `clusters` — Liste der zugehörigen Genre-Cluster
+- `deezer_rank` — Deezer Popularity-Wert
+- `file_path` — Relativer Pfad zur Preview-Datei
+
+**Optionale Felder (nach Enrichment/Labeling):**
+- `lastfm_playcount`, `lastfm_listeners`, `lastfm_tags`
+- `label` — hit/mid/flop (nach Label-Berechnung)
+- `robustness` — validated/single_source/contested
+
+### Playlists (M3U8)
+
+Extended M3U Format für lesbare Tracklisten:
+
+```m3u8
+#EXTM3U
+#EXTINF:30,Artist Name - Track Title
+previews/a7/3770028292.mp3
+#EXTINF:30,Another Artist - Another Track
+previews/e1/1234567.mp3
+```
+
+**Generierung bei Bedarf** über Utility-Funktion in `scripts/utils/playlist.py`.
+
+---
+
+## Verzeichnisstruktur (Repository)
 
 ```
 SpotilyzerTraining/
@@ -74,24 +163,29 @@ SpotilyzerTraining/
 ├── .gitignore
 │
 ├── configs/
+│   ├── clusters.yaml            # Genre-Cluster-Definitionen mit Seed-Artists
+│   ├── paths.yaml               # Pfade (Preview-Speicherort etc.)
 │   ├── thresholds.yaml          # Rank/Plays-Schwellenwerte für Labels
-│   ├── training.yaml            # Hyperparameter für XGBoost
-│   └── paths.yaml               # Pfade (Preview-Speicherort etc.)
+│   └── training.yaml            # Hyperparameter für XGBoost
 │
 ├── scripts/
 │   ├── run_pipeline.py          # Orchestrierungs-Skript (Haupteinstieg)
 │   ├── scout_deezer.py          # Deezer-Scouting (Genre-Cluster + Charts)
-│   ├── download_previews.py     # Preview-Download
+│   ├── download_previews.py     # Preview-Download (mit ID3-Tagging + Sharding)
 │   ├── enrich_lastfm.py         # Last.fm-Anreicherung
 │   ├── compute_labels.py        # Multi-Source-Label-Berechnung
 │   ├── extract_embeddings.py    # MERT-Embedding-Extraktion
 │   ├── train_model.py           # XGBoost-Training mit Sample Weights
-│   └── evaluate.py              # Metriken + Confusion Matrix
+│   ├── evaluate.py              # Metriken + Confusion Matrix
+│   ├── _utils.py                # Shared helpers (logging, config-loader)
+│   └── utils/
+│       ├── __init__.py
+│       ├── paths.py             # get_shard_dir(), get_preview_path()
+│       ├── playlist.py          # create_playlist(), find_track()
+│       └── metadata.py          # JSONL lesen/schreiben/updaten
 │
-├── data/                        # CSV-Dateien (nicht in Git)
-│   ├── scouted_tracks.csv
-│   ├── scouted_tracks_enriched.csv
-│   └── labeled_tracks.csv
+├── data/                        # Legacy, wird nicht mehr verwendet
+│   └── .gitkeep
 │
 ├── logs/                        # Log-Dateien
 │   ├── scout_YYYY-MM-DD.log
@@ -111,16 +205,6 @@ SpotilyzerTraining/
         └── embeddings_meta.csv
 ```
 
-### Externe Daten (NICHT im Repo)
-
-**Preview-Dateien** werden NICHT im Repository gespeichert. Konfigurierbar in `configs/paths.yaml`:
-
-```yaml
-paths:
-  previews: "D:/Data/SpotilyzerPreviews"  # ~2-3 GB MP3s
-  embeddings: "./outputs/embeddings"       # Kann im Repo bleiben (kleiner)
-```
-
 ---
 
 ## Setup
@@ -133,7 +217,9 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
 # Dependencies
-pip install pandas pyyaml tqdm requests pylast rapidfuzz python-dotenv
+pip install pyyaml tqdm requests pylast rapidfuzz python-dotenv
+pip install mutagen                        # Für ID3-Tagging
+pip install pandas numpy                   # Für Embeddings-Pipeline (embeddings_meta.csv)
 pip install torch torchaudio transformers  # Für MERT
 pip install xgboost scikit-learn           # Für Training
 pip install jupyter matplotlib seaborn     # Für Notebooks (optional)
@@ -141,6 +227,11 @@ pip install jupyter matplotlib seaborn     # Für Notebooks (optional)
 # API-Keys einrichten
 Copy-Item .env.example .env
 # Dann .env editieren und LASTFM_API_KEY eintragen
+
+# Datenverzeichnis anlegen (falls noch nicht vorhanden)
+New-Item -ItemType Directory -Force -Path "G:\Dev\SpotilyzerData\previews"
+New-Item -ItemType Directory -Force -Path "G:\Dev\SpotilyzerData\metadata"
+New-Item -ItemType Directory -Force -Path "G:\Dev\SpotilyzerData\playlists"
 ```
 
 ---
@@ -167,17 +258,18 @@ python scripts/run_pipeline.py --train         # Nur Training (Labels + XGBoost)
 
 ```
 scout_deezer.py
-    ↓ scouted_tracks.csv
+    ↓ metadata/tracks.jsonl (initial: track_id, title, artist, album, clusters, deezer_rank)
 download_previews.py
-    ↓ previews/*.mp3
+    ↓ previews/{shard}/{track_id}.mp3 (mit ID3-Tags)
+    ↓ metadata/tracks.jsonl (file_path hinzugefügt)
 enrich_lastfm.py
-    ↓ scouted_tracks_enriched.csv
+    ↓ metadata/tracks.jsonl (lastfm_* Felder hinzugefügt)
 compute_labels.py
-    ↓ labeled_tracks.csv
+    ↓ metadata/tracks.jsonl (label + robustness hinzugefügt)
 extract_embeddings.py
-    ↓ embeddings.npy + embeddings_meta.csv
+    ↓ outputs/embeddings/embeddings.npy + embeddings_meta.csv
 train_model.py
-    ↓ spotilyzer_model.joblib + training_report.json
+    ↓ outputs/models/spotilyzer_model.joblib + training_report.json
 ```
 
 ---
@@ -189,7 +281,7 @@ train_model.py
 - **API:** Kostenlos, keine Auth für öffentliche Endpoints
 - **Audio:** 30-Sekunden-Previews (intelligent ausgewählt, repräsentativ)
 - **Metrik:** `rank` (0 - ~1.000.000, höher = populärer)
-- **Einschränkung:** Preview-URLs expiren nach ~15 Min
+- **Einschränkung:** Preview-URLs expiren nach ~15 Min (frisch holen vor Download!)
 
 ### Sekundär: Last.fm (Validierung)
 
@@ -206,6 +298,61 @@ train_model.py
 | Shazam | Keine öffentliche API seit 2019 |
 | SoundCloud | ToS verbietet ML-Training (2025) |
 | YouTube | Machbar, aber Matching-Problem zu aufwändig |
+
+---
+
+## Genre-Cluster
+
+### Aktuelle Cluster (23)
+
+**Metal (7):** extreme_metal, gothic, heavy_metal, power_symphonic, modern_metal, metalcore, crossover
+
+**Rock (5):** hard_rock, mainstream_rock, modern_rock, classic_southern_rock, alternative_rock
+
+**Punk/Hardcore (2):** punk, hardcore
+
+**Electronic (2):** trance, house
+
+**Pop (2):** pop_mainstream, pop_dance
+
+**Hip-Hop (1):** hiphop_mainstream
+
+**R&B / Soul (1):** rnb_soul
+
+**Country (1):** country
+
+**Latin (1):** latin
+
+**Indie / Folk (1):** indie_folk
+
+**Charts:** DE, US, UK, FR, JP, BR, ES, GLOBAL
+
+### Scouting-Ansatz je Cluster
+
+| Cluster-ID | Deezer Genre-ID | Radio-IDs | Scouting |
+|------------|----------------|-----------|----------|
+| `pop_mainstream` | 132 | — | Seed-only (Pop-Radio zu breit) |
+| `pop_dance` | 113 | 30951, 42122 | Radio + Seed |
+| `hiphop_mainstream` | 116 | 31021, 30991 | Radio-Hauptquelle |
+| `rnb_soul` | 165+169 | 30881, 42402, 38445 | Radio + Seed |
+| `country` | 84 | 42282 | Radio + Seed |
+| `latin` | 197 | 30941 | Radio + Seed |
+| `indie_folk` | 85+466 | 30781, 42262 | Radio + Seed |
+
+**Nicht verwendete Genres (nach Analyse):**
+- Genre 106 (Electro/Techno): Kein Pop-Bezug, würde 4. Electronic-Cluster ergeben
+- Genre 152 (Rock): Deezer-Radio ist Deutschrock-Mix, Overlap mit bestehenden Clustern
+- Genre 464 (Heavy Metal): Deezer-Radio = Within Temptation/Helloween, Overlap mit gothic/power_symphonic
+- Genre 144 (Reggae): Zu nischig, Ranks meist 300–420K (fast alles Mid)
+- `hiphop_alternative`: Kein fokussiertes Deezer-Radio vorhanden
+
+### Radio-Scouting (Hinweis für Implementierung)
+
+Die neuen Cluster nutzen das Feld `radios` in `clusters.yaml`. Das erfordert eine Erweiterung von `scout_deezer.py` um Radio-Scouting via `/radio/{id}/tracks`.
+
+### Cluster-Konfiguration
+
+Cluster-Definitionen mit Seed-Artists und Radio-IDs in `configs/clusters.yaml`.
 
 ---
 
@@ -274,10 +421,12 @@ Alle Skripte schreiben Logs nach `logs/`:
 
 ```
 logs/
-├── scout_2026-03-07.log        # Deezer-Scouting
-├── enrichment_2026-03-07.log   # Last.fm (inkl. Match-Fehler!)
-├── training_2026-03-07.log     # Modell-Training
-└── pipeline_2026-03-07.log     # Orchestrierung
+├── scout_2026-03-08.log        # Deezer-Scouting
+├── download_2026-03-08.log     # Preview-Download
+├── enrichment_2026-03-08.log   # Last.fm (inkl. Match-Fehler!)
+├── labels_2026-03-08.log       # Label-Berechnung
+├── training_2026-03-08.log     # Modell-Training
+└── pipeline_2026-03-08.log     # Orchestrierung
 ```
 
 **Wichtig für Enrichment-Log:**
@@ -287,38 +436,30 @@ logs/
 
 ---
 
-## Genre-Cluster
-
-16 Cluster mit Seed-Artists:
-
-**Metal (7):** extreme_metal, gothic, heavy_metal, power_symphonic, modern_metal, metalcore, crossover
-
-**Rock (5):** hard_rock, mainstream_rock, modern_rock, classic_southern_rock, alternative_rock
-
-**Punk/Hardcore (2):** punk, hardcore
-
-**Electronic (2):** trance, house
-
-**Zusätzlich:** Country-Charts (DE, US, UK, FR, JP, BR, ES, GLOBAL)
-
-**Bekannte Lücken:** Kein Pop/R&B/Hip-Hop-Cluster — diese Genres kommen nur über Charts rein. Könnte Genre-Bias erklären.
-
----
-
 ## Konfigurationsdateien
 
 ### configs/paths.yaml
 
 ```yaml
 paths:
-  # Preview-Dateien (NICHT im Repo, zu groß)
-  previews: "D:/Data/SpotilyzerPreviews"
-  
+  # Externes Datenverzeichnis (NICHT im Repo)
+  data_root: "G:/Dev/SpotilyzerData"
+
+  # Preview-Dateien (MD5-Sharding)
+  previews: "G:/Dev/SpotilyzerData/previews"
+
+  # Metadaten (JSONL)
+  metadata: "G:/Dev/SpotilyzerData/metadata"
+
+  # Playlists (M3U8)
+  playlists: "G:/Dev/SpotilyzerData/playlists"
+
   # Embeddings (können im Repo bleiben)
   embeddings: "./outputs/embeddings"
-  
+
   # Hauptprojekt (für Model-Deployment)
   main_project: "../Spotilyzer"
+  main_project_models: "../Spotilyzer/models"
 ```
 
 ### configs/thresholds.yaml
@@ -384,20 +525,27 @@ random_state: 42
 
 ## Offene Aufgaben
 
-### Kurzfristig (für Claude Code)
-- [ ] `configs/paths.yaml` erstellen
-- [ ] `scripts/run_pipeline.py` (Orchestrierung mit Menü)
-- [ ] `scripts/scout_deezer.py` aus Hauptprojekt migrieren
-- [ ] `scripts/download_previews.py` aus Hauptprojekt migrieren
-- [ ] `scripts/extract_embeddings.py` aus Hauptprojekt migrieren
-- [ ] `scripts/train_model.py` mit Sample Weights
-- [ ] `scripts/evaluate.py` für Metriken
-- [ ] Logging in alle Skripte einbauen
-- [ ] `logs/` Verzeichnis-Handling
+### Kurzfristig
+- [x] `scripts/utils/` Ordner erstellen mit `paths.py`, `playlist.py`, `metadata.py`
+- [x] `scripts/_utils.py` erweitern (load_clusters_config, get_genre_clusters etc.)
+- [x] `scripts/download_previews.py` anpassen (MD5-Sharding, ID3-Tags, JSONL-Update)
+- [x] `scripts/scout_deezer.py` anpassen (JSONL statt CSV, kein pandas)
+- [x] `scripts/enrich_lastfm.py` anpassen (JSONL statt CSV, kein pandas)
+- [x] `scripts/compute_labels.py` anpassen (JSONL statt CSV, kein pandas)
+- [x] `scripts/extract_embeddings.py` anpassen (Dateipfade aus JSONL statt glob)
+- [x] `scripts/train_model.py` anpassen (Labels aus JSONL statt CSV)
+- [x] `scripts/evaluate.py` anpassen (Labels aus JSONL statt CSV)
+- [x] `scripts/run_pipeline.py` anpassen (keine CSV-Pfad-Args mehr)
+- [x] `configs/paths.yaml` aktualisieren (metadata, playlists Einträge)
+- [x] `configs/clusters.yaml` erstellen (Seed-Artists auslagern)
+- [ ] Bestehende CSV-Daten → JSONL migrieren (einmalig)
 
 ### Mittelfristig
-- [ ] Genre-balanced Sampling evaluieren
-- [ ] Fehlende Genre-Cluster (Pop, Hip-Hop, R&B) hinzufügen
+- [x] **Deezer-Genre-Struktur prüfen** — alle 25 Genres analysiert, Radio-Tracklists gesampelt
+- [x] **Neue Genre-Cluster definiert** — 7 neue Cluster in `configs/clusters.yaml` eingetragen
+- [x] `scout_deezer.py` um Radio-Scouting erweitern (`radios`-Feld aus clusters.yaml)
+- [ ] Ersten vollständigen Scouting-Lauf starten (alle 23 Cluster)
+- [ ] Genre-balanced Sampling evaluieren (nach erstem Lauf)
 - [ ] Last.fm-Schwellenwerte kalibrieren (nach erstem Durchlauf)
 - [ ] LightGBM als Alternative testen
 
@@ -432,3 +580,4 @@ random_state: 42
 - [pylast (Python Last.fm Client)](https://github.com/pylast/pylast)
 - [Deezer API Docs](https://developers.deezer.com/api)
 - [XGBoost sample_weight](https://xgboost.readthedocs.io/en/stable/python/python_api.html)
+- [mutagen (ID3-Tagging)](https://mutagen.readthedocs.io/)

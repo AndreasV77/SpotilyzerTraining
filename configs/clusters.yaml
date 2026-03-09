@@ -1,0 +1,527 @@
+# Genre-Cluster-Definitionen für SpotilyzerTraining
+#
+# Jeder Cluster hat:
+#   display_name:  Anzeigename
+#   description:   Kurzbeschreibung
+#   seed_artists:  Liste von Artists für Deezer-Scouting (Artist Top-Tracks)
+#   radios:        Optional — Deezer Radio-IDs als zusätzliche Track-Quelle
+#                  (Erfordert Radio-Scouting-Support in scout_deezer.py)
+#
+# Tracks werden über Artist Top-Tracks und/oder Radio-Tracklisten gesammelt.
+# Ein Track kann mehreren Clustern angehören.
+#
+# Deezer Genre-IDs zur Referenz:
+#   84=Country  85=Alternative  106=Electro  113=Dance  116=Rap/Hip-Hop
+#   132=Pop     144=Reggae      152=Rock     153=Blues  165=R&B
+#   169=Soul&Funk  197=Latin    464=Heavy Metal  466=Folk
+
+# ══════════════════════════════════════════════════════════════════════════════
+# METAL (7)
+# ══════════════════════════════════════════════════════════════════════════════
+
+extreme_metal:
+  display_name: "Extreme Metal"
+  description: "Death Metal, Melodic Death Metal, Thrash-Grenzbereich"
+  seed_artists:
+    - "Arch Enemy"
+    - "Children of Bodom"
+    - "In Flames"
+    - "At The Gates"
+    - "Dismember"
+    - "Bloodbath"
+    - "Amon Amarth"
+    - "Dark Tranquillity"
+    - "Carcass"
+    - "Cannibal Corpse"
+    - "Kreator"
+    - "Sodom"
+    - "Destruction"
+
+gothic:
+  display_name: "Gothic (M'era-Luna-Spektrum)"
+  description: "Gothic Metal/Rock/Doom, EBM, Aggrotech, NDH, Dark Electro"
+  seed_artists:
+    - "Rammstein"
+    - "Eisbrecher"
+    - "Oomph!"
+    - "Megaherz"
+    - "Crematory"
+    - "HIM"
+    - "Lacrimosa"
+    - "Tiamat"
+    - "Combichrist"
+    - "Hocico"
+    - "Suicide Commando"
+    - "Die Krupps"
+    - "Front 242"
+    - "KMFDM"
+    - "Marilyn Manson"
+    - "Joachim Witt"
+    - "Unheilig"
+
+heavy_metal:
+  display_name: "Heavy Metal / Classic Metal"
+  description: "Iron Maiden, Manowar, Judas Priest"
+  seed_artists:
+    - "Iron Maiden"
+    - "Manowar"
+    - "Judas Priest"
+    - "Accept"
+    - "Saxon"
+    - "Dio"
+    - "Black Sabbath"
+    - "Ozzy Osbourne"
+    - "Motörhead"
+    - "Scorpions"
+    - "W.A.S.P."
+
+power_symphonic:
+  display_name: "Power Metal / Symphonic Metal"
+  description: "Dragonforce, Hammerfall, Powerwolf, Nightwish"
+  seed_artists:
+    - "Dragonforce"
+    - "Hammerfall"
+    - "Powerwolf"
+    - "Sabaton"
+    - "Nightwish"
+    - "Epica"
+    - "Within Temptation"
+    - "Kamelot"
+    - "Blind Guardian"
+    - "Helloween"
+    - "Stratovarius"
+    - "Sonata Arctica"
+
+modern_metal:
+  display_name: "Modern Metal"
+  description: "Five Finger Death Punch, Disturbed, etc."
+  seed_artists:
+    - "Five Finger Death Punch"
+    - "Disturbed"
+    - "Shinedown"
+    - "Breaking Benjamin"
+    - "Three Days Grace"
+    - "Seether"
+    - "Papa Roach"
+    - "Volbeat"
+    - "Avenged Sevenfold"
+    - "Bullet For My Valentine"
+
+metalcore:
+  display_name: "Metalcore"
+  description: "As I Lay Dying, Killswitch Engage, Parkway Drive"
+  seed_artists:
+    - "As I Lay Dying"
+    - "Killswitch Engage"
+    - "Parkway Drive"
+    - "August Burns Red"
+    - "Trivium"
+    - "Bullet for My Valentine"
+    - "Asking Alexandria"
+    - "We Came As Romans"
+    - "Architects"
+    - "Bring Me The Horizon"
+
+crossover:
+  display_name: "Crossover"
+  description: "Clawfinger, RATM, Body Count"
+  seed_artists:
+    - "Rage Against The Machine"
+    - "Clawfinger"
+    - "Body Count"
+    - "Suicidal Tendencies"
+    - "Infectious Grooves"
+    - "Dog Eat Dog"
+    - "Downset"
+    - "Stuck Mojo"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ROCK (5)
+# ══════════════════════════════════════════════════════════════════════════════
+
+hard_rock:
+  display_name: "Hard Rock"
+  description: "Airbourne, Bullet, Mötley Crüe"
+  seed_artists:
+    - "Airbourne"
+    - "Bullet"
+    - "Mötley Crüe"
+    - "AC/DC"
+    - "Guns N' Roses"
+    - "Skid Row"
+    - "Def Leppard"
+    - "Bon Jovi"
+    - "Kiss"
+    - "Whitesnake"
+    - "Twisted Sister"
+
+mainstream_rock:
+  display_name: "Mainstream Rock"
+  description: "Bryan Adams, U2, Bon Jovi"
+  seed_artists:
+    - "Bryan Adams"
+    - "U2"
+    - "Bon Jovi"
+    - "Nickelback"
+    - "Daughtry"
+    - "Matchbox Twenty"
+    - "Train"
+    - "OneRepublic"
+    - "Coldplay"
+    - "The Script"
+
+modern_rock:
+  display_name: "Modern Rock"
+  description: "Godsmack, Saliva, Staind"
+  seed_artists:
+    - "Godsmack"
+    - "Saliva"
+    - "Staind"
+    - "Puddle of Mudd"
+    - "Drowning Pool"
+    - "Theory of a Deadman"
+    - "Chevelle"
+    - "Sevendust"
+    - "Trapt"
+    - "Evanescence"
+
+classic_southern_rock:
+  display_name: "Classic Rock / Southern Rock"
+  description: "Greta Van Fleet, Lynyrd Skynyrd, Deep Purple"
+  seed_artists:
+    - "Greta Van Fleet"
+    - "Lynyrd Skynyrd"
+    - "Deep Purple"
+    - "Led Zeppelin"
+    - "The Allman Brothers Band"
+    - "ZZ Top"
+    - "Creedence Clearwater Revival"
+    - "Free"
+    - "Bad Company"
+    - "Foghat"
+
+alternative_rock:
+  display_name: "Alternative Rock"
+  description: "Smashing Pumpkins, Queens of the Stone Age"
+  seed_artists:
+    - "The Smashing Pumpkins"
+    - "Queens of the Stone Age"
+    - "Foo Fighters"
+    - "Soundgarden"
+    - "Alice In Chains"
+    - "Pearl Jam"
+    - "Stone Temple Pilots"
+    - "Audioslave"
+    - "Nirvana"
+    - "Rage Against The Machine"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PUNK / HARDCORE (2)
+# ══════════════════════════════════════════════════════════════════════════════
+
+punk:
+  display_name: "Punk"
+  description: "Green Day, Authority Zero, NOFX"
+  seed_artists:
+    - "Green Day"
+    - "NOFX"
+    - "Bad Religion"
+    - "The Offspring"
+    - "Rancid"
+    - "Pennywise"
+    - "Rise Against"
+    - "Sum 41"
+    - "Authority Zero"
+    - "Anti-Flag"
+    - "Social Distortion"
+    - "Dropkick Murphys"
+
+hardcore:
+  display_name: "Hardcore"
+  description: "Biohazard, Hatebreed, Madball"
+  seed_artists:
+    - "Hatebreed"
+    - "Madball"
+    - "Terror"
+    - "Agnostic Front"
+    - "Sick of It All"
+    - "Earth Crisis"
+    - "Converge"
+    - "Knocked Loose"
+    - "Code Orange"
+    - "Turnstile"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ELECTRONIC (2)
+# ══════════════════════════════════════════════════════════════════════════════
+
+trance:
+  display_name: "Trance"
+  description: "Tiësto, Armin van Buuren, Above & Beyond"
+  seed_artists:
+    - "Tiësto"
+    - "Armin van Buuren"
+    - "Above & Beyond"
+    - "Paul van Dyk"
+    - "Ferry Corsten"
+    - "ATB"
+    - "Dash Berlin"
+    - "Cosmic Gate"
+    - "Gareth Emery"
+    - "Andrew Rayel"
+
+house:
+  display_name: "House / Deep House / Lounge"
+  description: "Daft Punk, Disclosure, Rüfüs Du Sol — clubbig/tief, kein Radio-Pop"
+  # Abgrenzung zu pop_dance: house = club-orientiert/tief; pop_dance = radio-friendly
+  seed_artists:
+    - "Daft Punk"
+    - "Disclosure"
+    - "Calvin Harris"
+    - "Duke Dumont"
+    - "Rüfüs Du Sol"
+    - "Lane 8"
+    - "Nora En Pure"
+    - "Meduza"
+    - "Robin Schulz"
+    - "Frankie Knuckles"
+    - "Larry Heard"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# POP (2)
+# ══════════════════════════════════════════════════════════════════════════════
+
+pop_mainstream:
+  display_name: "Mainstream Pop"
+  description: "Taylor Swift, Ariana Grande, Dua Lipa — breiter Mainstream-Pop"
+  # Deezer Pop-Radio (Genre 132, ID 42062) zu breit (K-Pop, Latin, Indie — alles drin)
+  # → Nur Seed-Artists verwenden
+  seed_artists:
+    - "Taylor Swift"
+    - "Ariana Grande"
+    - "Dua Lipa"
+    - "Ed Sheeran"
+    - "Justin Bieber"
+    - "Selena Gomez"
+    - "Billie Eilish"
+    - "Katy Perry"
+    - "Harry Styles"
+    - "Bruno Mars"
+    - "Olivia Rodrigo"
+    - "Shawn Mendes"
+    - "Lizzo"
+    - "Doja Cat"
+    - "Charlie Puth"
+
+pop_dance:
+  display_name: "Dance Pop / Electropop"
+  description: "Alan Walker, Marshmello, Felix Jaehn — radio-freundlicher EDM-Pop"
+  # Deezer Dance-Radio (Genre 113, ID 30951): R3HAB, DJ Snake, Lost Frequencies — sehr sauber
+  # Abgrenzung zu house: pop_dance = radio-friendly/mainstream; house = clubbig/tief
+  # Abgrenzung zu trance: pop_dance hat Gesang/Pop-Struktur, trance ist instrumental/progressiv
+  radios:
+    - 30951  # Dance (Genre 113)
+    - 42122  # Dance (Genre 113, 2. Radio)
+  seed_artists:
+    - "Alan Walker"
+    - "Marshmello"
+    - "The Chainsmokers"
+    - "Avicii"
+    - "Zedd"
+    - "Martin Garrix"
+    - "Galantis"
+    - "Felix Jaehn"
+    - "Lost Frequencies"
+    - "Jax Jones"
+    - "R3HAB"
+    - "DJ Snake"
+    - "Kygo"
+    - "David Guetta"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# HIP-HOP (1)
+# ══════════════════════════════════════════════════════════════════════════════
+
+hiphop_mainstream:
+  display_name: "Mainstream Hip-Hop / Rap"
+  description: "Drake, Kendrick Lamar, Travis Scott — US Rap, Trap, Mainstream"
+  # Deezer US Rap Radio (31021) sehr sauber und fokussiert (Rank 512K–987K)
+  # Kein hiphop_alternative: Deezer hat dafür keine eigene Radio-Quelle
+  radios:
+    - 31021  # US Rap (Genre 116)
+    - 30991  # Hip-Hop (Genre 116)
+  seed_artists:
+    - "Drake"
+    - "Kendrick Lamar"
+    - "Travis Scott"
+    - "Post Malone"
+    - "J. Cole"
+    - "Cardi B"
+    - "Nicki Minaj"
+    - "Lil Baby"
+    - "21 Savage"
+    - "Juice WRLD"
+    - "Future"
+    - "Lil Uzi Vert"
+    - "Tyler, the Creator"
+    - "Gunna"
+    - "Young Thug"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# R&B / SOUL (1)
+# ══════════════════════════════════════════════════════════════════════════════
+
+rnb_soul:
+  display_name: "R&B / Soul"
+  description: "SZA, Beyoncé, Frank Ocean + klassischer Soul — Otis Redding, Diana Ross"
+  # R&B Radio (30881) sehr sauber: Tyla, Khalid, Chris Brown, SZA (Rank 536K–969K)
+  # Soul&Funk Radio (42402) für klassischen Soul-Anteil
+  radios:
+    - 30881  # R&B (Genre 165)
+    - 42402  # Soul & Funk (Genre 169)
+    - 38445  # Motown (Genre 165)
+  seed_artists:
+    - "Beyoncé"
+    - "SZA"
+    - "H.E.R."
+    - "Khalid"
+    - "Frank Ocean"
+    - "The Weeknd"
+    - "Usher"
+    - "Alicia Keys"
+    - "John Legend"
+    - "Tyla"
+    - "Brent Faiyaz"
+    - "Daniel Caesar"
+    - "Marvin Gaye"
+    - "Stevie Wonder"
+    - "Otis Redding"
+    - "Diana Ross"
+    - "Aretha Franklin"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# COUNTRY (1)
+# ══════════════════════════════════════════════════════════════════════════════
+
+country:
+  display_name: "Country"
+  description: "Morgan Wallen, Luke Combs, Chris Stapleton — US Country"
+  # Deezer Country-Radio (42282) vorhanden, aber dünn besetzt — Seed-Artists wichtig
+  radios:
+    - 42282  # Country (Genre 84)
+  seed_artists:
+    - "Morgan Wallen"
+    - "Luke Combs"
+    - "Kane Brown"
+    - "Carrie Underwood"
+    - "Blake Shelton"
+    - "Garth Brooks"
+    - "Johnny Cash"
+    - "Dolly Parton"
+    - "Zac Brown Band"
+    - "Miranda Lambert"
+    - "Chris Stapleton"
+    - "Tim McGraw"
+    - "Keith Urban"
+    - "Dierks Bentley"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LATIN (1)
+# ══════════════════════════════════════════════════════════════════════════════
+
+latin:
+  display_name: "Latin Pop / Reggaeton"
+  description: "Bad Bunny, J Balvin, Shakira — Latin Pop und Reggaeton"
+  # Deezer Reggaeton-Radio (30941) sehr fokussiert und sauber
+  # Salsa (37051), Tango (37041), Bossa Nova (39101) zu nischig → Seed-Artists bevorzugt
+  radios:
+    - 30941  # Reggaeton (Genre 197)
+  seed_artists:
+    - "Bad Bunny"
+    - "J Balvin"
+    - "Ozuna"
+    - "Daddy Yankee"
+    - "Shakira"
+    - "Maluma"
+    - "Rosalía"
+    - "Karol G"
+    - "Camilo"
+    - "Becky G"
+    - "Nicky Jam"
+    - "Anuel AA"
+    - "Luis Fonsi"
+    - "Farruko"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# INDIE / FOLK (1)
+# ══════════════════════════════════════════════════════════════════════════════
+
+indie_folk:
+  display_name: "Indie / Folk"
+  description: "Bon Iver, Phoebe Bridgers, The 1975 — Indie Rock, Indie Pop, Folk"
+  # Deezer Alternative-Radio (30781): Wallows, Royel Otis, Nilüfer Yanya — klar Indie-fokussiert
+  # KEIN Overlap mit alternative_rock (der ist Grunge/Post-Grunge-Fokus)
+  # Folk-Radio (42262) für klassische Folk-Acts
+  radios:
+    - 30781  # Alternative / Indie (Genre 85)
+    - 42262  # Folk (Genre 466)
+  seed_artists:
+    - "Bon Iver"
+    - "Fleet Foxes"
+    - "Phoebe Bridgers"
+    - "The National"
+    - "Vampire Weekend"
+    - "Tame Impala"
+    - "Arctic Monkeys"
+    - "Sufjan Stevens"
+    - "Hozier"
+    - "The 1975"
+    - "Mumford & Sons"
+    - "Of Monsters and Men"
+    - "The Lumineers"
+    - "Iron & Wine"
+    - "Mitski"
+    - "Alvvays"
+    - "Laura Marling"
+    - "Passenger"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CHARTS (Deezer Playlist-IDs)
+# ══════════════════════════════════════════════════════════════════════════════
+# Charts werden separat behandelt (nicht als Seed-Artist-Cluster).
+# Der Cluster-Name wird als "charts_{country_code}" generiert.
+
+charts:
+  DE:
+    name: "Germany"
+    playlist_id: 1111143121
+  US:
+    name: "USA"
+    playlist_id: 1313621735
+  UK:
+    name: "UK"
+    playlist_id: 1111142221
+  FR:
+    name: "France"
+    playlist_id: 1109890291
+  JP:
+    name: "Japan"
+    playlist_id: 1362508955
+  BR:
+    name: "Brazil"
+    playlist_id: 1111141961
+  ES:
+    name: "Spain"
+    playlist_id: 1116190041
+  GLOBAL:
+    name: "Global"
+    playlist_id: 3155776842
+
+# ══════════════════════════════════════════════════════════════════════════════
+# API-KONFIGURATION
+# ══════════════════════════════════════════════════════════════════════════════
+
+scouting:
+  tracks_per_artist: 25
+  request_delay: 0.25
+  max_retries: 3

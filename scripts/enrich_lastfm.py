@@ -1,20 +1,17 @@
 """
 enrich_lastfm.py
 ================
-Reichert Deezer-Scouting-Daten mit Last.fm-Metriken an.
+Reichert Tracks in tracks.jsonl mit Last.fm-Metriken an.
 
 Workflow:
-1. Liest scouted_tracks.csv (Deezer-Daten)
+1. Liest metadata/tracks.jsonl
 2. Sucht jeden Track auf Last.fm via Artist + Title
-3. Fuzzy-Matching für robuste Zuordnung
-4. Speichert playcount, listeners, match_confidence
+3. Fuzzy-Matching fuer robuste Zuordnung
+4. Schreibt lastfm_playcount, lastfm_listeners, lastfm_tags zurueck in JSONL
 
 Voraussetzungen:
 - Last.fm API-Key in .env (LASTFM_API_KEY)
-- pip install pylast rapidfuzz python-dotenv tqdm pandas
-
-Autor: Claude (für Andreas Vogelsang / Spotilyzer)
-Datum: 2026-03-07
+- pip install pylast rapidfuzz python-dotenv tqdm
 """
 
 import os
@@ -26,7 +23,6 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional
 
-import pandas as pd
 from dotenv import load_dotenv
 from tqdm import tqdm
 
@@ -42,14 +38,27 @@ except ImportError:
     print("rapidfuzz nicht installiert. Bitte: pip install rapidfuzz")
     sys.exit(1)
 
+from _utils import (
+    setup_logging,
+    load_paths_config,
+    ensure_dir,
+)
+from utils.metadata import (
+    read_tracks,
+    update_tracks,
+    get_tracks_jsonl_path,
+)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # KONFIGURATION
 # ══════════════════════════════════════════════════════════════════════════════
 
 REQUEST_DELAY = 0.25  # Sekunden zwischen API-Calls
-MATCH_THRESHOLD = 85  # Minimum Fuzzy-Score für Match (0-100)
+MATCH_THRESHOLD = 85  # Minimum Fuzzy-Score fuer Match (0-100)
 MAX_RETRIES = 3
+
+# Logger (wird in main() initialisiert)
+logger = None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -57,19 +66,14 @@ MAX_RETRIES = 3
 # ══════════════════════════════════════════════════════════════════════════════
 
 def normalize_string(s: str) -> str:
-    """Normalisiert String für Fuzzy-Matching."""
+    """Normalisiert String fuer Fuzzy-Matching."""
     if not s:
         return ""
     s = s.lower()
-    # Entferne Klammern und deren Inhalt (feat., remix, live, etc.)
     s = re.sub(r"\s*[\(\[].*?[\)\]]", "", s)
-    # Entferne Sonderzeichen außer Leerzeichen
     s = re.sub(r"[^\w\s]", "", s)
-    # Entferne "the" am Anfang
     s = re.sub(r"^the\s+", "", s)
-    # Entferne Suffixe wie "remastered", "live", "remix"
     s = re.sub(r"\s+(live|remix|remaster(ed)?|edit|version|radio edit).*$", "", s)
-    # Normalisiere Whitespace
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
@@ -80,10 +84,7 @@ def compute_match_confidence(
     lastfm_artist: str,
     lastfm_title: str,
 ) -> float:
-    """
-    Berechnet Match-Konfidenz zwischen Deezer und Last.fm Track.
-    Returns: 0.0 - 1.0
-    """
+    """Berechnet Match-Konfidenz (0.0 - 1.0)."""
     artist_score = fuzz.ratio(
         normalize_string(deezer_artist),
         normalize_string(lastfm_artist),
@@ -92,8 +93,6 @@ def compute_match_confidence(
         normalize_string(deezer_title),
         normalize_string(lastfm_title),
     )
-    
-    # Title ist wichtiger als Artist (60/40)
     combined = 0.4 * artist_score + 0.6 * title_score
     return combined / 100.0
 
@@ -103,11 +102,14 @@ class LastFMResult:
     """Ergebnis einer Last.fm-Abfrage."""
     playcount: Optional[int] = None
     listeners: Optional[int] = None
+    tags: list = None
     matched: bool = False
     match_confidence: float = 0.0
-    lastfm_artist: str = ""
-    lastfm_title: str = ""
     error: Optional[str] = None
+
+    def __post_init__(self):
+        if self.tags is None:
+            self.tags = []
 
 
 def fetch_lastfm_data(
@@ -115,46 +117,38 @@ def fetch_lastfm_data(
     artist: str,
     title: str,
 ) -> LastFMResult:
-    """
-    Holt Track-Daten von Last.fm.
-    
-    Args:
-        network: pylast LastFMNetwork-Instanz
-        artist: Artist-Name (von Deezer)
-        title: Track-Titel (von Deezer)
-    
-    Returns:
-        LastFMResult mit playcount, listeners und Match-Info
-    """
+    """Holt Track-Daten von Last.fm."""
     result = LastFMResult()
-    
+
     for attempt in range(MAX_RETRIES):
         try:
             track = network.get_track(artist, title)
-            
-            # Track-Info abrufen
+
             playcount = track.get_playcount()
             listeners = track.get_listener_count()
-            
-            # Korrigierte Namen von Last.fm (für Match-Confidence)
+
             corrected_artist = track.get_artist().get_name()
             corrected_title = track.get_title()
-            
-            # Match-Confidence berechnen
+
             confidence = compute_match_confidence(
                 artist, title,
                 corrected_artist, corrected_title,
             )
-            
+
             result.playcount = playcount
             result.listeners = listeners
             result.matched = confidence >= (MATCH_THRESHOLD / 100.0)
             result.match_confidence = confidence
-            result.lastfm_artist = corrected_artist
-            result.lastfm_title = corrected_title
-            
+
+            # Tags holen
+            try:
+                top_tags = track.get_top_tags(limit=5)
+                result.tags = [tag.item.get_name().lower() for tag in top_tags]
+            except Exception:
+                result.tags = []
+
             return result
-            
+
         except pylast.WSError as e:
             if "Track not found" in str(e):
                 result.error = "not_found"
@@ -165,14 +159,14 @@ def fetch_lastfm_data(
             else:
                 result.error = str(e)
                 return result
-                
+
         except Exception as e:
             if attempt < MAX_RETRIES - 1:
                 time.sleep(2)
                 continue
             result.error = str(e)
             return result
-    
+
     return result
 
 
@@ -181,138 +175,116 @@ def fetch_lastfm_data(
 # ══════════════════════════════════════════════════════════════════════════════
 
 def enrich_tracks(
-    input_path: Path,
-    output_path: Path,
+    jsonl_path: Path,
     api_key: str,
     api_secret: str = "",
     resume: bool = True,
 ) -> dict:
     """
-    Reichert Track-Daten mit Last.fm-Metriken an.
-    
-    Args:
-        input_path: Pfad zu scouted_tracks.csv
-        output_path: Pfad für Output-CSV
-        api_key: Last.fm API Key
-        api_secret: Last.fm API Secret (optional)
-        resume: Wenn True, überspringe bereits verarbeitete Tracks
-    
+    Reichert Tracks in tracks.jsonl mit Last.fm-Metriken an.
+
     Returns:
         Dict mit Statistiken
     """
-    # Last.fm-Netzwerk initialisieren
     network = pylast.LastFMNetwork(
         api_key=api_key,
         api_secret=api_secret if api_secret else None,
     )
-    
-    # Input laden
-    df = pd.read_csv(input_path)
-    print(f"Geladen: {len(df)} Tracks aus {input_path}")
-    
-    # Neue Spalten initialisieren (falls nicht vorhanden)
-    new_columns = {
-        "lastfm_playcount": None,
-        "lastfm_listeners": None,
-        "lastfm_matched": False,
-        "lastfm_match_confidence": 0.0,
-        "lastfm_artist": "",
-        "lastfm_title": "",
-        "lastfm_error": "",
-    }
-    
-    for col, default in new_columns.items():
-        if col not in df.columns:
-            df[col] = default
-    
-    # Resume-Logik: Finde unverarbeitete Tracks
-    if resume and output_path.exists():
-        existing_df = pd.read_csv(output_path)
-        # Merge um bereits verarbeitete zu übernehmen
-        if "lastfm_playcount" in existing_df.columns:
-            processed_ids = set(existing_df[existing_df["lastfm_matched"].notna()]["track_id"])
-            print(f"Resume: {len(processed_ids)} bereits verarbeitet")
-        else:
-            processed_ids = set()
-    else:
-        processed_ids = set()
-    
-    # Statistiken
+
+    tracks = read_tracks(jsonl_path)
+    print(f"  Geladen: {len(tracks)} Tracks aus {jsonl_path}")
+
     stats = {
-        "total": len(df),
+        "total": len(tracks),
         "processed": 0,
         "matched": 0,
         "not_found": 0,
         "low_confidence": 0,
         "errors": 0,
-        "skipped": len(processed_ids),
+        "skipped": 0,
     }
-    
-    # Verarbeitung
-    for idx, row in tqdm(df.iterrows(), total=len(df), desc="Last.fm Enrichment"):
-        track_id = row["track_id"]
-        
-        # Skip wenn bereits verarbeitet
-        if track_id in processed_ids:
+
+    updates = {}
+    save_interval = 100
+
+    for track in tqdm(tracks, desc="Last.fm Enrichment"):
+        track_id = track["track_id"]
+        artist = track.get("artist", "")
+        title = track.get("title", "")
+
+        # Resume: Skip wenn bereits mit Last.fm-Daten vorhanden
+        if resume and track.get("lastfm_playcount") is not None:
+            stats["skipped"] += 1
             continue
-        
-        artist = row.get("artist", "")
-        title = row.get("track_name", "")
-        
+
         if not artist or not title:
             stats["errors"] += 1
+            if logger:
+                logger.warning(f"Track {track_id}: kein Artist/Title")
             continue
-        
-        # Last.fm abfragen
+
         result = fetch_lastfm_data(network, artist, title)
         time.sleep(REQUEST_DELAY)
-        
-        # Ergebnis speichern
-        df.at[idx, "lastfm_playcount"] = result.playcount
-        df.at[idx, "lastfm_listeners"] = result.listeners
-        df.at[idx, "lastfm_matched"] = result.matched
-        df.at[idx, "lastfm_match_confidence"] = result.match_confidence
-        df.at[idx, "lastfm_artist"] = result.lastfm_artist
-        df.at[idx, "lastfm_title"] = result.lastfm_title
-        df.at[idx, "lastfm_error"] = result.error or ""
-        
-        # Statistiken
+
         stats["processed"] += 1
+
         if result.error == "not_found":
             stats["not_found"] += 1
+            if logger:
+                logger.info(f"Nicht gefunden: {artist} - {title}")
+            continue
         elif result.error:
             stats["errors"] += 1
-        elif result.matched:
-            stats["matched"] += 1
-        else:
+            if logger:
+                logger.warning(f"Fehler bei {artist} - {title}: {result.error}")
+            continue
+
+        if not result.matched:
             stats["low_confidence"] += 1
-        
-        # Zwischenspeichern alle 100 Tracks
-        if stats["processed"] % 100 == 0:
-            df.to_csv(output_path, index=False)
+            if logger:
+                logger.info(
+                    f"Low confidence ({result.match_confidence:.2f}): "
+                    f"{artist} - {title}"
+                )
+            continue
+
+        stats["matched"] += 1
+
+        updates[track_id] = {
+            "lastfm_playcount": result.playcount,
+            "lastfm_listeners": result.listeners,
+            "lastfm_tags": result.tags,
+        }
+
+        # Zwischenspeichern
+        if len(updates) >= save_interval:
+            update_tracks(jsonl_path, updates)
             tqdm.write(f"  Zwischenstand gespeichert ({stats['processed']} verarbeitet)")
-    
-    # Final speichern
-    df.to_csv(output_path, index=False)
-    
+            updates = {}
+
+    # Rest speichern
+    if updates:
+        update_tracks(jsonl_path, updates)
+
     return stats
 
 
 def print_stats(stats: dict):
     """Gibt Statistiken formatiert aus."""
+    processed = max(1, stats["processed"])
     print(f"""
-╔═══════════════════════════════════════════════════════════════════════════════
-║  LAST.FM ENRICHMENT COMPLETE
-╠═══════════════════════════════════════════════════════════════════════════════
-║  Tracks gesamt:        {stats['total']:>6}
-║  Bereits verarbeitet:  {stats['skipped']:>6}
-║  Neu verarbeitet:      {stats['processed']:>6}
-╠═══════════════════════════════════════════════════════════════════════════════
-║  ✅ Gematcht:          {stats['matched']:>6}  ({100*stats['matched']/max(1,stats['processed']):.1f}%)
-║  ❓ Nicht gefunden:    {stats['not_found']:>6}  ({100*stats['not_found']/max(1,stats['processed']):.1f}%)
-║  ⚠️  Low Confidence:    {stats['low_confidence']:>6}  ({100*stats['low_confidence']/max(1,stats['processed']):.1f}%)
-║  ❌ Fehler:            {stats['errors']:>6}
-╚═══════════════════════════════════════════════════════════════════════════════
+{'=' * 79}
+  LAST.FM ENRICHMENT COMPLETE
+{'=' * 79}
+  Tracks gesamt:        {stats['total']:>6}
+  Bereits verarbeitet:  {stats['skipped']:>6}
+  Neu verarbeitet:      {stats['processed']:>6}
+{'─' * 79}
+  Gematcht:             {stats['matched']:>6}  ({100*stats['matched']/processed:.1f}%)
+  Nicht gefunden:       {stats['not_found']:>6}  ({100*stats['not_found']/processed:.1f}%)
+  Low Confidence:       {stats['low_confidence']:>6}  ({100*stats['low_confidence']/processed:.1f}%)
+  Fehler:               {stats['errors']:>6}
+{'=' * 79}
 """)
 
 
@@ -321,20 +293,14 @@ def print_stats(stats: dict):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def main():
+    global logger
+
+    paths = load_paths_config()
+    metadata_dir = paths.get("metadata")
+    jsonl_path = get_tracks_jsonl_path(metadata_dir)
+
     parser = argparse.ArgumentParser(
-        description="Reichert Deezer-Tracks mit Last.fm-Metriken an"
-    )
-    parser.add_argument(
-        "--input", "-i",
-        type=Path,
-        required=True,
-        help="Input CSV (scouted_tracks.csv)",
-    )
-    parser.add_argument(
-        "--output", "-o",
-        type=Path,
-        default=Path("data/scouted_tracks_enriched.csv"),
-        help="Output CSV (default: data/scouted_tracks_enriched.csv)",
+        description="Reichert Tracks mit Last.fm-Metriken an (JSONL)"
     )
     parser.add_argument(
         "--no-resume",
@@ -348,44 +314,47 @@ def main():
         help="Pfad zur .env-Datei mit API-Keys",
     )
     args = parser.parse_args()
-    
+
+    # Logging
+    logger = setup_logging("enrichment", log_dir=paths.get("logs"))
+
     # .env laden
     load_dotenv(args.env_file)
-    
+
     api_key = os.getenv("LASTFM_API_KEY")
     api_secret = os.getenv("LASTFM_API_SECRET", "")
-    
+
     if not api_key:
         print("Fehler: LASTFM_API_KEY nicht in .env gefunden!")
-        print("Erstelle eine .env-Datei mit:")
-        print("  LASTFM_API_KEY=dein_api_key")
-        print("")
-        print("API-Key erstellen: https://www.last.fm/api/account/create")
+        print("  API-Key erstellen: https://www.last.fm/api/account/create")
         sys.exit(1)
-    
-    # Input prüfen
-    if not args.input.exists():
-        print(f"Fehler: Input-Datei nicht gefunden: {args.input}")
+
+    if not jsonl_path.exists():
+        print(f"Fehler: tracks.jsonl nicht gefunden: {jsonl_path}")
+        print("  -> Erst 'python scripts/scout_deezer.py' ausfuehren!")
         sys.exit(1)
-    
-    # Output-Verzeichnis erstellen
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    
-    # Enrichment durchführen
-    print(f"Input:  {args.input}")
-    print(f"Output: {args.output}")
-    print(f"Resume: {'Nein' if args.no_resume else 'Ja'}")
-    print("")
-    
+
+    print(f"{'=' * 79}")
+    print(f"  LAST.FM ENRICHMENT")
+    print(f"{'=' * 79}")
+    print(f"  JSONL:   {jsonl_path}")
+    print(f"  Resume:  {'Nein' if args.no_resume else 'Ja'}")
+
+    logger.info(f"Enrichment gestartet: {jsonl_path}")
+
     stats = enrich_tracks(
-        input_path=args.input,
-        output_path=args.output,
+        jsonl_path=jsonl_path,
         api_key=api_key,
         api_secret=api_secret,
         resume=not args.no_resume,
     )
-    
+
     print_stats(stats)
+
+    logger.info(
+        f"Enrichment abgeschlossen: {stats['matched']} gematcht, "
+        f"{stats['not_found']} nicht gefunden, {stats['errors']} Fehler"
+    )
 
 
 if __name__ == "__main__":
