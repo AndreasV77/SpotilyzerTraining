@@ -136,13 +136,14 @@ def evaluate_model(
     metrics["confusion_matrix"] = cm.tolist()
 
     # Per-Class Metrics
+    # LabelEncoder sortiert alphabetisch: flop=0, hit=1, mid=2
     report = classification_report(
         y, y_pred,
-        target_names=["flop", "mid", "hit"],
+        target_names=["flop", "hit", "mid"],
         output_dict=True,
     )
     metrics["per_class"] = {}
-    for cls in ["flop", "mid", "hit"]:
+    for cls in ["flop", "hit", "mid"]:
         metrics["per_class"][cls] = {
             "precision": float(report[cls]["precision"]),
             "recall": float(report[cls]["recall"]),
@@ -195,14 +196,14 @@ def print_evaluation_report(metrics: dict, target_metrics: dict = None):
     print(f"\n  Per-Class Performance:")
     print(f"    {'Class':8} {'Precision':>10} {'Recall':>10} {'F1':>10} {'Support':>10}")
     print(f"    {'-' * 48}")
-    for cls in ["flop", "mid", "hit"]:
+    for cls in ["flop", "hit", "mid"]:
         m = metrics["per_class"][cls]
         print(f"    {cls:8} {m['precision']:>10.3f} {m['recall']:>10.3f} {m['f1']:>10.3f} {m['support']:>10}")
 
     print(f"\n  Confusion Matrix:")
-    print(f"    {'':8} {'flop':>8} {'mid':>8} {'hit':>8}  <- predicted")
+    print(f"    {'':8} {'flop':>8} {'hit':>8} {'mid':>8}  <- predicted")
     cm = metrics["confusion_matrix"]
-    for i, cls in enumerate(["flop", "mid", "hit"]):
+    for i, cls in enumerate(["flop", "hit", "mid"]):
         row = f"    {cls:8}"
         for j in range(3):
             row += f" {cm[i][j]:>7}"
@@ -264,7 +265,10 @@ def main():
 
     metadata_dir = paths.get("metadata")
     jsonl_path = get_tracks_jsonl_path(metadata_dir)
-    default_model = str(paths.get("models", "./outputs/models") / "spotilyzer_model.joblib")
+    models_dir = paths.get("models", Path("./outputs/models"))
+    # Neuestes spotilyzer_model_*.joblib bevorzugen, Fallback auf legacy-Name
+    _glob_models = sorted(models_dir.glob("spotilyzer_model_*.joblib"), key=lambda p: p.stat().st_mtime, reverse=True)
+    default_model = str(_glob_models[0] if _glob_models else models_dir / "spotilyzer_model.joblib")
     default_embeddings = str(paths.get("embeddings", "./outputs/embeddings"))
 
     parser = argparse.ArgumentParser(
