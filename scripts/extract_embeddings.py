@@ -3,8 +3,9 @@ extract_embeddings.py
 =====================
 Extrahiert MERT-Embeddings aus den heruntergeladenen Preview-MP3s.
 
-MERT (Music undERstanding Transformer) ist ein auf Musik spezialisiertes
+MERT-v1-330M (Music undERstanding Transformer) ist ein auf Musik spezialisiertes
 Audio-Modell von m-a-p (Music and Audio Processing Lab).
+Erzeugt 1024-dimensionale Embeddings (95M: 768-dim).
 
 Input:
   - metadata/tracks.jsonl (Track-Liste mit file_path)
@@ -14,7 +15,12 @@ Output:
   - outputs/embeddings/embeddings.npy (NumPy-Array)
   - outputs/embeddings/embeddings_meta.csv (Track-IDs, Clusters)
 
-GPU-Empfehlung: MERT auf GPU: <1s pro Track, auf CPU: ~10-15s pro Track
+Checkpoint-System:
+  - Alle CHECKPOINT_INTERVAL Tracks wird ein Zwischenspeicher geschrieben
+  - Bei Neustart wird der Checkpoint automatisch geladen (--resume, default: an)
+  - --force ignoriert vorhandenen Checkpoint und startet von vorne
+
+GPU-Empfehlung: MERT-330M auf GPU: ~1-2s pro Track, auf CPU: ~20-30s pro Track
 """
 
 import sys
@@ -34,6 +40,7 @@ from transformers import AutoModel, AutoProcessor
 from _utils import (
     setup_logging,
     load_paths_config,
+    load_training_config,
     ensure_dir,
 )
 from utils.metadata import read_tracks, filter_tracks, get_tracks_jsonl_path
@@ -42,11 +49,16 @@ from utils.metadata import read_tracks, filter_tracks, get_tracks_jsonl_path
 # KONFIGURATION
 # ══════════════════════════════════════════════════════════════════════════════
 
-MODEL_NAME = "m-a-p/MERT-v1-95M"  # ~380MB, musik-optimiert
+# Modell-Name wird aus training.yaml (embedder.model) gelesen.
+# Fallback falls Config fehlt:
+_DEFAULT_MODEL = "m-a-p/MERT-v1-330M"
 
 # Audio-Konfiguration (MERT erwartet 24kHz)
 TARGET_SAMPLE_RATE = 24000
 MAX_AUDIO_LENGTH_SEC = 30
+
+# Alle N erfolgreichen Tracks einen Checkpoint schreiben
+CHECKPOINT_INTERVAL = 500
 
 # Logger (wird in main() initialisiert)
 logger = None
@@ -59,7 +71,8 @@ logger = None
 class MERTEmbedder:
     """Wrapper fuer MERT-Embedding-Extraktion."""
 
-    def __init__(self, model_name: str = MODEL_NAME, device: str = None):
+    def __init__(self, model_name: str, device: str = None):
+        self.model_name = model_name
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         print(f"  Lade MERT-Modell auf {self.device.upper()}...")
         if logger:
@@ -77,7 +90,10 @@ class MERTEmbedder:
     def load_audio(self, filepath: Path) -> torch.Tensor | None:
         """Laedt und preprocessed eine Audio-Datei."""
         try:
-            waveform, sample_rate = torchaudio.load(filepath)
+            try:
+                waveform, sample_rate = torchaudio.load(str(filepath), backend="soundfile")
+            except Exception:
+                waveform, sample_rate = torchaudio.load(filepath)
 
             # Mono konvertieren falls Stereo
             if waveform.shape[0] > 1:
@@ -118,7 +134,7 @@ class MERTEmbedder:
 
             # Letzten Hidden State nehmen und ueber Zeit mitteln
             hidden_states = outputs.last_hidden_state
-            embedding = hidden_states.mean(dim=1).squeeze(0)  # [768]
+            embedding = hidden_states.mean(dim=1).squeeze(0)  # [1024]
 
             return embedding.cpu().numpy()
 
@@ -136,7 +152,7 @@ class MERTEmbedder:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# BATCH-VERARBEITUNG
+# CHECKPOINT
 # ══════════════════════════════════════════════════════════════════════════════
 
 @dataclass
@@ -148,29 +164,119 @@ class EmbeddingRecord:
     embedding_idx: int
 
 
+def load_checkpoint(checkpoint_path: Path) -> tuple[list, list, set]:
+    """
+    Laedt einen vorhandenen Checkpoint.
+
+    Returns:
+        (embeddings_list, records_list, done_ids)
+    """
+    if not checkpoint_path.exists():
+        return [], [], set()
+
+    try:
+        data = np.load(checkpoint_path, allow_pickle=True)
+        embeddings = list(data["embeddings"])
+        raw_records = data["records"]  # structured array oder object array
+
+        records = []
+        done_ids = set()
+        for r in raw_records:
+            rec = EmbeddingRecord(
+                track_id=int(r["track_id"]),
+                clusters=str(r["clusters"]),
+                filename=str(r["filename"]),
+                embedding_idx=int(r["embedding_idx"]),
+            )
+            records.append(rec)
+            done_ids.add(int(r["track_id"]))
+
+        print(f"  Checkpoint geladen: {len(done_ids)} Tracks bereits verarbeitet")
+        if logger:
+            logger.info(f"Checkpoint geladen: {len(done_ids)} Tracks")
+        return embeddings, records, done_ids
+
+    except Exception as e:
+        print(f"  WARNUNG: Checkpoint konnte nicht geladen werden: {e} — starte neu")
+        if logger:
+            logger.warning(f"Checkpoint-Ladefehler: {e}")
+        return [], [], set()
+
+
+def save_checkpoint(
+    checkpoint_path: Path,
+    embeddings_list: list,
+    records: list,
+):
+    """Speichert einen Zwischenspeicher."""
+    try:
+        records_array = np.array(
+            [{"track_id": r.track_id, "clusters": r.clusters,
+              "filename": r.filename, "embedding_idx": r.embedding_idx}
+             for r in records],
+            dtype=object,
+        )
+        np.savez(
+            checkpoint_path,
+            embeddings=np.stack(embeddings_list, axis=0),
+            records=records_array,
+        )
+        if logger:
+            logger.debug(f"Checkpoint gespeichert: {len(records)} Tracks")
+    except Exception as e:
+        print(f"  WARNUNG: Checkpoint konnte nicht gespeichert werden: {e}")
+        if logger:
+            logger.warning(f"Checkpoint-Speicherfehler: {e}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BATCH-VERARBEITUNG
+# ══════════════════════════════════════════════════════════════════════════════
+
 def process_batch(
     embedder: MERTEmbedder,
     tracks: list[dict],
     data_root: Path,
     output_dir: Path,
+    checkpoint_embeddings: list = None,
+    checkpoint_records: list = None,
+    checkpoint_path: Path = None,
 ) -> dict:
-    """Verarbeitet Tracks anhand JSONL-Metadaten."""
+    """
+    Verarbeitet Tracks anhand JSONL-Metadaten.
+
+    checkpoint_embeddings / checkpoint_records: bereits verarbeitete Daten aus
+    einem frueheren Lauf — werden mit neuen Ergebnissen zusammengefuehrt.
+    """
+    checkpoint_embeddings = checkpoint_embeddings or []
+    checkpoint_records = checkpoint_records or []
 
     if not tracks:
-        print("  Keine Tracks mit file_path gefunden!")
-        if logger:
-            logger.warning("Keine Tracks mit file_path")
+        if checkpoint_embeddings:
+            print(f"  Keine neuen Tracks — {len(checkpoint_embeddings)} aus Checkpoint.")
+        else:
+            print("  Keine Tracks mit file_path gefunden!")
+            if logger:
+                logger.warning("Keine Tracks mit file_path")
         return {"success": 0, "failed": 0}
 
-    print(f"  Verarbeite {len(tracks)} Dateien...")
+    already_done = len(checkpoint_embeddings)
+    print(f"  Verarbeite {len(tracks)} Dateien"
+          + (f" (+ {already_done} aus Checkpoint)" if already_done else "") + "...")
     if logger:
-        logger.info(f"Verarbeite {len(tracks)} Tracks")
+        logger.info(f"Verarbeite {len(tracks)} neue Tracks ({already_done} aus Checkpoint)")
 
-    embeddings_list = []
-    records = []
+    # Laufende Listen (starten mit Checkpoint-Daten)
+    embeddings_list = list(checkpoint_embeddings)
+    records = list(checkpoint_records)
+
+    # Embedding-Indizes korrigieren (Checkpoint hatte 0-basiert aufgebaut)
+    for i, rec in enumerate(records):
+        rec.embedding_idx = i
+
     stats = {"success": 0, "failed": 0, "errors": []}
-
     start_time = time.time()
+    next_checkpoint_at = already_done + CHECKPOINT_INTERVAL
 
     for track in tqdm(tracks, desc="Extracting", unit="file"):
         track_id = track["track_id"]
@@ -203,9 +309,16 @@ def process_batch(
         ))
         stats["success"] += 1
 
+        # Checkpoint alle CHECKPOINT_INTERVAL erfolgreiche Tracks
+        total_done = already_done + stats["success"]
+        if checkpoint_path and total_done >= next_checkpoint_at:
+            save_checkpoint(checkpoint_path, embeddings_list, records)
+            print(f"\n  [Checkpoint] {total_done} Tracks gespeichert.")
+            next_checkpoint_at = total_done + CHECKPOINT_INTERVAL
+
     elapsed = time.time() - start_time
 
-    # Speichern
+    # Finales Speichern
     if embeddings_list:
         ensure_dir(output_dir)
 
@@ -218,13 +331,13 @@ def process_batch(
         records_df.to_csv(records_path, index=False)
 
         info = {
-            "model": MODEL_NAME,
+            "model": embedder.model_name,
             "embedding_dim": int(embeddings_array.shape[1]),
             "num_embeddings": int(embeddings_array.shape[0]),
             "sample_rate": TARGET_SAMPLE_RATE,
             "created": time.strftime("%Y-%m-%d %H:%M:%S"),
             "processing_time_sec": round(elapsed, 1),
-            "avg_time_per_file_sec": round(elapsed / len(tracks), 2),
+            "avg_time_per_file_sec": round(elapsed / max(len(tracks), 1), 2),
         }
         info_path = output_dir / "embeddings_info.json"
         with open(info_path, "w", encoding="utf-8") as f:
@@ -241,6 +354,11 @@ def process_batch(
                 f"Dauer: {elapsed:.1f}s"
             )
 
+        # Checkpoint loeschen nach erfolgreichem Abschluss
+        if checkpoint_path and checkpoint_path.exists():
+            checkpoint_path.unlink()
+            print(f"  Checkpoint geloescht (nicht mehr benoetigt).")
+
     stats["elapsed"] = elapsed
     return stats
 
@@ -253,19 +371,28 @@ def main():
     global logger
 
     paths = load_paths_config()
+    training_cfg = load_training_config()
 
     data_root = paths.get("data_root")
     metadata_dir = paths.get("metadata")
     jsonl_path = get_tracks_jsonl_path(metadata_dir)
-    default_output = str(paths.get("embeddings", "./outputs/embeddings"))
+    embeddings_base = paths.get("embeddings", Path("./outputs/embeddings"))
+
+    # Modell aus training.yaml, CLI kann es überschreiben
+    cfg_model = training_cfg.get("embedder", {}).get("model", _DEFAULT_MODEL)
 
     parser = argparse.ArgumentParser(
         description="Extrahiere MERT-Embeddings aus Preview-MP3s"
     )
     parser.add_argument(
+        "--model",
+        default=cfg_model,
+        help=f"HuggingFace-Modell-Name (default: aus training.yaml = {cfg_model})"
+    )
+    parser.add_argument(
         "--output", "-o",
-        default=default_output,
-        help=f"Output-Verzeichnis fuer Embeddings (default: {default_output})"
+        default=None,
+        help="Output-Verzeichnis (default: outputs/embeddings/<model-short-name>/)"
     )
     parser.add_argument(
         "--limit",
@@ -286,11 +413,33 @@ def main():
         help="Device fuer MERT (default: auto)"
     )
     parser.add_argument(
+        "--resume",
+        action="store_true",
+        default=True,
+        help="Checkpoint laden und weiterarbeiten (default: an)"
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Checkpoint ignorieren, von vorne beginnen"
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Zeige was verarbeitet wuerde, ohne tatsaechlich zu laden"
     )
     args = parser.parse_args()
+
+    # Modell-Kurzname (z.B. "MERT-v1-95M") für Subdir und Anzeige
+    model_name = args.model
+    model_short = model_name.split("/")[-1]  # "MERT-v1-95M"
+
+    # Output-Verzeichnis: explizit oder automatisch aus Modell-Kurzname ableiten
+    if args.output:
+        output_dir = Path(args.output)
+    else:
+        output_dir = Path(embeddings_base) / model_short
 
     # Logging
     logger = setup_logging("embeddings", log_dir=paths.get("logs"))
@@ -298,8 +447,9 @@ def main():
     print(f"{'=' * 79}")
     print(f"  MERT EMBEDDING EXTRACTOR")
     print(f"{'=' * 79}")
+    print(f"  Modell:    {model_name}")
 
-    output_dir = Path(args.output)
+    checkpoint_path = output_dir / "embeddings_checkpoint.npz"
 
     if not jsonl_path.exists():
         print(f"  Fehler: tracks.jsonl nicht gefunden: {jsonl_path}")
@@ -316,8 +466,20 @@ def main():
     if args.limit > 0:
         tracks = tracks[:args.limit]
 
+    # Checkpoint laden (wenn --resume und nicht --force)
+    checkpoint_embeddings, checkpoint_records, done_ids = [], [], set()
+    if args.resume and not args.force:
+        checkpoint_embeddings, checkpoint_records, done_ids = load_checkpoint(checkpoint_path)
+
+    # Bereits verarbeitete Tracks herausfiltern
+    if done_ids:
+        before = len(tracks)
+        tracks = [t for t in tracks if t["track_id"] not in done_ids]
+        print(f"  Ueberspringe: {before - len(tracks)} bereits verarbeitete Tracks")
+
     print(f"  JSONL:     {jsonl_path}")
-    print(f"  Tracks:    {len(tracks)} (mit file_path)")
+    print(f"  Tracks:    {len(tracks)} verbleibend"
+          + (f" ({len(done_ids)} aus Checkpoint)" if done_ids else ""))
     print(f"  Output:    {output_dir}")
 
     if args.cluster:
@@ -335,14 +497,16 @@ def main():
         print(f"  VRAM:      {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
 
     logger.info(
-        f"Embedding-Extraktion gestartet: {len(tracks)} Tracks, "
-        f"Device: {actual_device.upper()}"
+        f"Embedding-Extraktion gestartet: {len(tracks)} neue Tracks, "
+        f"{len(done_ids)} aus Checkpoint, Device: {actual_device.upper()}"
     )
 
-    # Geschaetzte Zeit
-    time_per_file = 0.8 if actual_device == "cuda" else 12.0
+    # Geschaetzte Zeit (95M: ~0.5s/Track GPU; 330M: ~0.8s/Track GPU)
+    is_330m = "330M" in model_name
+    time_per_file = (0.8 if is_330m else 0.5) if actual_device == "cuda" else 12.0
     est_minutes = len(tracks) * time_per_file / 60
     print(f"\n  Geschaetzte Zeit: ~{est_minutes:.0f} Minuten")
+    print(f"  Checkpoint:  alle {CHECKPOINT_INTERVAL} Tracks")
 
     if args.dry_run:
         print(f"\n  [DRY RUN] Keine Verarbeitung durchgefuehrt.")
@@ -350,20 +514,27 @@ def main():
 
     # Modell laden und verarbeiten
     print()
-    embedder = MERTEmbedder(MODEL_NAME, device)
+    embedder = MERTEmbedder(model_name, device)
     print()
 
     stats = process_batch(
-        embedder, tracks, data_root, output_dir,
+        embedder,
+        tracks,
+        data_root,
+        output_dir,
+        checkpoint_embeddings=checkpoint_embeddings,
+        checkpoint_records=checkpoint_records,
+        checkpoint_path=checkpoint_path,
     )
 
     # Ergebnis
+    total_success = stats["success"] + len(done_ids)
     print(f"\n{'─' * 79}")
     print(f"  EXTRACTION COMPLETE")
     print(f"{'─' * 79}")
-    print(f"  Erfolgreich:    {stats['success']:>5}")
+    print(f"  Erfolgreich:    {total_success:>5}  (davon neu: {stats['success']}, Checkpoint: {len(done_ids)})")
     print(f"  Fehlgeschlagen: {stats['failed']:>5}")
-    print(f"  Zeit:           {stats.get('elapsed', 0):.1f}s ({stats.get('elapsed', 0)/60:.1f} min)")
+    print(f"  Zeit (neu):     {stats.get('elapsed', 0):.1f}s ({stats.get('elapsed', 0)/60:.1f} min)")
 
     if stats['success'] > 0:
         print(f"  Durchschnitt:   {stats.get('elapsed', 0)/stats['success']:.2f}s pro Datei")
@@ -374,7 +545,8 @@ def main():
             print(f"    {filename}: {error}")
 
     logger.info(
-        f"Extraktion abgeschlossen: {stats['success']} ok, "
+        f"Extraktion abgeschlossen: {total_success} gesamt "
+        f"({stats['success']} neu, {len(done_ids)} Checkpoint), "
         f"{stats['failed']} failed, {stats.get('elapsed', 0):.1f}s"
     )
 

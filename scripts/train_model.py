@@ -334,7 +334,14 @@ def main():
 
     metadata_dir = paths.get("metadata")
     jsonl_path = get_tracks_jsonl_path(metadata_dir)
-    default_embeddings = str(paths.get("embeddings", "./outputs/embeddings"))
+    embeddings_base = paths.get("embeddings", Path("./outputs/embeddings"))
+    # Embedder-Modell aus training.yaml → Subverzeichnis ableiten
+    cfg_model = training_cfg.get("embedder", {}).get("model", "")
+    model_short = cfg_model.split("/")[-1] if cfg_model else ""
+    if model_short:
+        default_embeddings = str(Path(embeddings_base) / model_short)
+    else:
+        default_embeddings = str(embeddings_base)
     default_output = str(paths.get("models", "./outputs/models"))
 
     parser = argparse.ArgumentParser(
@@ -374,6 +381,8 @@ def main():
     print(f"{'=' * 79}")
     print(f"  SPOTILYZER MODEL TRAINING (mit sample_weight)")
     print(f"{'=' * 79}")
+    if cfg_model:
+        print(f"  Embedder:  {cfg_model}  (aus training.yaml)")
 
     embeddings_dir = Path(args.embeddings_dir)
     output_dir = Path(args.output_dir)

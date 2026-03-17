@@ -1,19 +1,32 @@
+# Embedder-Modell für Embedding-Extraktion und Training
+# Diesen Eintrag ändern, um auf ein anderes MERT-Modell zu wechseln.
+# extract_embeddings.py liest ihn und schreibt in outputs/embeddings/<short-name>/
+# train_model.py liest ihn und sucht Embeddings im gleichen Unterverzeichnis.
+embedder:
+  model: "m-a-p/MERT-v1-95M"   # Optionen: "m-a-p/MERT-v1-95M" | "m-a-p/MERT-v1-330M"
+  # Hinweis XGBoost-Parameter:
+  #   95M  (768-dim)  → max_depth: 6, colsample_bytree: 0.8  (wie erstes Modell)
+  #   330M (1024-dim) → max_depth: 4, colsample_bytree: 0.6  (mehr Regularisierung)
+
 model:
   type: xgboost
   params:
-    n_estimators: 200
-    max_depth: 6
-    learning_rate: 0.1
+    n_estimators: 500        # Hoch setzen — early stopping findet das Optimum
+    max_depth: 4             # 6 → 4: flachere Bäume generalisieren besser auf 1024-dim
+    learning_rate: 0.05      # Kleiner → mehr Bäume nötig, aber besser mit early stopping
     subsample: 0.8
-    colsample_bytree: 0.8
-    min_child_weight: 1
-    gamma: 0
-    reg_alpha: 0
-    reg_lambda: 1
+    colsample_bytree: 0.6    # 0.8 → 0.6: weniger Features pro Baum, weniger Overfitting
+    min_child_weight: 3      # 1 → 3: Mindest-Samples pro Blatt, verhindert kleine Splits
+    gamma: 0.1               # 0 → 0.1: Mindest-Gain für Split
+    reg_alpha: 0.5           # 0 → 0.5: L1-Regularisierung
+    reg_lambda: 2            # 1 → 2: L2-Regularisierung
     objective: "multi:softprob"
     num_class: 3
     eval_metric: "mlogloss"
-    # Hinweis: class_weight wird durch sample_weight im fit() ersetzt
+    # Hinweis: class_weight wird durch compute_sample_weight("balanced") × robustness ersetzt
+
+# Early Stopping: Training stoppt wenn eval_metric sich n Runden nicht verbessert
+early_stopping_rounds: 30
 
 validation:
   strategy: stratified_kfold
@@ -24,6 +37,6 @@ random_state: 42
 
 # Metriken für Evaluation
 target_metrics:
-  flop_recall_min: 0.50    # Aktuell: 0.26
-  hit_recall_min: 0.80     # Aktuell: 0.93
-  balanced_accuracy_min: 0.65  # Aktuell: 0.625
+  flop_recall_min: 0.50
+  hit_recall_min: 0.80
+  balanced_accuracy_min: 0.65

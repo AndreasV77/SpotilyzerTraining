@@ -60,7 +60,7 @@ PIPELINE_STEPS = {
     "embeddings": {
         "script": "extract_embeddings.py",
         "name": "MERT-Embedding-Extraktion",
-        "description": "Audio-Embeddings mit MERT-v1-95M extrahieren",
+        "description": "Audio-Embeddings mit konfiguriertem MERT-Modell extrahieren (siehe training.yaml)",
     },
     "train": {
         "script": "train_model.py",
@@ -118,7 +118,7 @@ def run_step(step_id: str, extra_args: list[str] = None) -> bool:
         result = subprocess.run(
             cmd,
             cwd=str(SCRIPTS_DIR.parent),
-            timeout=7200,  # 2h Timeout
+            timeout=None,  # Kein Timeout — Embedding-Extraktion kann >2h dauern
         )
 
         if result.returncode == 0:
@@ -131,12 +131,6 @@ def run_step(step_id: str, extra_args: list[str] = None) -> bool:
             if logger:
                 logger.error(f"Schritt {step_id} fehlgeschlagen (returncode={result.returncode})")
             return False
-
-    except subprocess.TimeoutExpired:
-        print(f"\n  -> TIMEOUT: {step['name']} nach 2h abgebrochen.")
-        if logger:
-            logger.error(f"Schritt {step_id} Timeout nach 2h")
-        return False
     except Exception as e:
         print(f"\n  -> FEHLER: {e}")
         if logger:
@@ -277,7 +271,7 @@ def interactive_menu(paths: dict):
 
     # Standard-Argumente fuer Schritte
     default_step_args = {
-        "scout": ["--charts", "DE", "US", "UK", "GLOBAL"],
+        "scout": ["--charts", "DE", "US", "UK", "FR", "BR", "ES", "GLOBAL"],
         "evaluate": ["--save-report"],
     }
 
@@ -375,7 +369,7 @@ def main():
 
     # Standard-Argumente fuer Schritte
     default_step_args = {
-        "scout": ["--charts", "DE", "US", "UK", "GLOBAL"],
+        "scout": ["--charts", "DE", "US", "UK", "FR", "BR", "ES", "GLOBAL"],
         "evaluate": ["--save-report"],
     }
 
