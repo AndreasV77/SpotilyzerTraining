@@ -26,6 +26,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split, StratifiedKFold
 from sklearn.preprocessing import LabelEncoder
+from sklearn.utils.class_weight import compute_sample_weight
 from sklearn.metrics import (
     classification_report,
     confusion_matrix,
@@ -152,6 +153,7 @@ def train_model(
     use_gpu: bool = False,
     test_size: float = 0.2,
     random_state: int = 42,
+    early_stopping_rounds: int = 30,
 ) -> tuple[xgb.XGBClassifier, dict]:
     """
     Trainiert XGBoost-Modell mit sample_weight.
@@ -183,16 +185,21 @@ def train_model(
     if logger:
         logger.info(f"Training gestartet: {len(X_train)} Train, {len(X_test)} Test")
 
-    model = xgb.XGBClassifier(**params)
+    model = xgb.XGBClassifier(**params, early_stopping_rounds=early_stopping_rounds)
 
-    # Training MIT sample_weight
-    print("  Trainiere XGBoost (mit sample_weight)...")
+    # Training MIT sample_weight (Robustheit × Klassenbalancierung)
+    class_weights = compute_sample_weight("balanced", y_train)
+    combined_weights = w_train * class_weights
+    print(f"  Trainiere XGBoost (sample_weight balanced, early_stopping={early_stopping_rounds})...")
     model.fit(
         X_train, y_train,
-        sample_weight=w_train,
+        sample_weight=combined_weights,
         eval_set=[(X_test, y_test)],
-        verbose=False,
+        verbose=50,
     )
+    best = getattr(model, "best_iteration", None)
+    if best is not None:
+        print(f"  Best iteration: {best + 1} / {xgb_params.get('n_estimators', '?')}")
 
     # Predictions
     y_pred = model.predict(X_test)
@@ -210,9 +217,10 @@ def train_model(
     metrics["confusion_matrix"] = cm.tolist()
 
     # Per-Class Metrics
+    # LabelEncoder sortiert alphabetisch: flop=0, hit=1, mid=2
     report = classification_report(
         y_test, y_pred,
-        target_names=["flop", "mid", "hit"],
+        target_names=["flop", "hit", "mid"],
         output_dict=True,
     )
     metrics["per_class"] = {
@@ -222,7 +230,7 @@ def train_model(
             "f1": float(report[cls]["f1-score"]),
             "support": int(report[cls]["support"]),
         }
-        for cls in ["flop", "mid", "hit"]
+        for cls in ["flop", "hit", "mid"]
     }
 
     # Cross-Validation mit sample_weight
@@ -231,10 +239,12 @@ def train_model(
     cv_scores = []
 
     for fold, (train_idx, val_idx) in enumerate(cv.split(X, y)):
-        fold_model = xgb.XGBClassifier(**params)
+        fold_model = xgb.XGBClassifier(**params, early_stopping_rounds=early_stopping_rounds)
+        fold_class_weights = compute_sample_weight("balanced", y[train_idx])
+        fold_combined = sample_weights[train_idx] * fold_class_weights
         fold_model.fit(
             X[train_idx], y[train_idx],
-            sample_weight=sample_weights[train_idx],
+            sample_weight=fold_combined,
             eval_set=[(X[val_idx], y[val_idx])],
             verbose=False,
         )
@@ -278,14 +288,14 @@ def print_report(metrics: dict, target_metrics: dict = None):
     print(f"\n  Per-Class Performance:")
     print(f"    {'Class':8} {'Precision':>10} {'Recall':>10} {'F1':>10} {'Support':>10}")
     print(f"    {'-' * 48}")
-    for cls in ["flop", "mid", "hit"]:
+    for cls in ["flop", "hit", "mid"]:
         m = metrics["per_class"][cls]
         print(f"    {cls:8} {m['precision']:>10.3f} {m['recall']:>10.3f} {m['f1']:>10.3f} {m['support']:>10}")
 
     print(f"\n  Confusion Matrix:")
-    print(f"    {'':8} {'flop':>8} {'mid':>8} {'hit':>8}  <- predicted")
+    print(f"    {'':8} {'flop':>8} {'hit':>8} {'mid':>8}  <- predicted")
     cm = metrics["confusion_matrix"]
-    for i, cls in enumerate(["flop", "mid", "hit"]):
+    for i, cls in enumerate(["flop", "hit", "mid"]):
         row = f"    {cls:8}"
         for j in range(3):
             row += f" {cm[i][j]:>7}"
@@ -412,6 +422,7 @@ def main():
     xgb_params = model_cfg.get("params", {})
     random_state = training_cfg.get("random_state", 42)
     target_metrics = training_cfg.get("target_metrics", {})
+    early_stopping_rounds = training_cfg.get("early_stopping_rounds", 30)
 
     # Training
     print(f"\n{'─' * 79}")
@@ -424,6 +435,7 @@ def main():
         use_gpu=args.gpu,
         test_size=args.test_size,
         random_state=random_state,
+        early_stopping_rounds=early_stopping_rounds,
     )
 
     # Report
@@ -433,14 +445,31 @@ def main():
     ensure_dir(output_dir)
     reports_dir = ensure_dir(paths.get("reports", output_dir.parent / "reports"))
 
-    model_path = output_dir / "spotilyzer_model.joblib"
-    joblib.dump({
+    # Embedder-Kurznamen aus embeddings_info.json ableiten
+    embedder_tag = f"{X.shape[1]}dim"  # Fallback: Feature-Dimension
+    embeddings_info_path = embeddings_dir / "embeddings_info.json"
+    if embeddings_info_path.exists():
+        try:
+            with open(embeddings_info_path, "r", encoding="utf-8") as f:
+                emb_info = json.load(f)
+            raw = emb_info.get("model", "")  # z.B. "m-a-p/MERT-v1-330M"
+            short = raw.split("/")[-1]        # "MERT-v1-330M"
+            embedder_tag = short.replace("-", "").replace(".", "")  # "MERTv1330M"
+        except Exception:
+            pass
+
+    date_tag = datetime.now().strftime("%Y%m%d")
+    model_filename = f"spotilyzer_model_{embedder_tag}_{date_tag}.joblib"
+    model_path = output_dir / model_filename
+
+    model_data = {
         "model": model,
         "label_encoder": label_encoder,
         "embedding_dim": X.shape[1],
         "training_config": training_cfg,
         "thresholds": thresholds_cfg,
-    }, model_path)
+    }
+    joblib.dump(model_data, model_path)
     print(f"\n  Modell gespeichert: {model_path}")
 
     # Report speichern
