@@ -344,13 +344,21 @@ def main():
         default_embeddings = str(embeddings_base)
     default_output = str(paths.get("models", "./outputs/models"))
 
+    _EMBEDDER_HF = {"95M": "m-a-p/MERT-v1-95M", "330M": "m-a-p/MERT-v1-330M"}
+
     parser = argparse.ArgumentParser(
         description="Trainiere XGBoost-Klassifikator auf MERT-Embeddings (mit sample_weight)"
     )
     parser.add_argument(
+        "--embedder",
+        choices=list(_EMBEDDER_HF.keys()),
+        default=None,
+        help="Embedder-Kurzname (95M | 330M) — leitet --embeddings-dir automatisch ab"
+    )
+    parser.add_argument(
         "--embeddings-dir",
         default=default_embeddings,
-        help=f"Verzeichnis mit Embeddings (default: {default_embeddings})"
+        help=f"Verzeichnis mit Embeddings (default: aus training.yaml = {default_embeddings})"
     )
     parser.add_argument(
         "--output-dir",
@@ -375,14 +383,22 @@ def main():
     )
     args = parser.parse_args()
 
+    # --embedder überschreibt --embeddings-dir (Kurzform hat Priorität)
+    if args.embedder:
+        hf_name = _EMBEDDER_HF[args.embedder]
+        model_short = hf_name.split("/")[-1]
+        args.embeddings_dir = str(Path(embeddings_base) / model_short)
+        cfg_model = hf_name  # für Anzeige
+
     # Logging
     logger = setup_logging("training", log_dir=paths.get("logs"))
 
     print(f"{'=' * 79}")
     print(f"  SPOTILYZER MODEL TRAINING (mit sample_weight)")
     print(f"{'=' * 79}")
+    src = "CLI --embedder" if args.embedder else "training.yaml"
     if cfg_model:
-        print(f"  Embedder:  {cfg_model}  (aus training.yaml)")
+        print(f"  Embedder:  {cfg_model}  ({src})")
 
     embeddings_dir = Path(args.embeddings_dir)
     output_dir = Path(args.output_dir)

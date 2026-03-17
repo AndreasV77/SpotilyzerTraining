@@ -26,6 +26,7 @@ from datetime import datetime
 from _utils import (
     setup_logging,
     load_paths_config,
+    load_training_config,
     ensure_dir,
 )
 from utils.metadata import get_tracks_jsonl_path
@@ -35,6 +36,12 @@ from utils.metadata import get_tracks_jsonl_path
 # ══════════════════════════════════════════════════════════════════════════════
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
+
+# Verfuegbare Embedder-Modelle (Kurzname → vollstaendiger HF-Name)
+SUPPORTED_MODELS = {
+    "95M":  "m-a-p/MERT-v1-95M",
+    "330M": "m-a-p/MERT-v1-330M",
+}
 
 PIPELINE_STEPS = {
     "scout": {
@@ -79,6 +86,32 @@ PIPELINE_ORDER = ["scout", "download", "enrich", "labels", "embeddings", "train"
 
 # Logger
 logger = None
+
+
+def _default_model_key() -> str:
+    """Liest den konfigurierten Embedder aus training.yaml und gibt den Kurznamen zurueck."""
+    try:
+        cfg = load_training_config()
+        hf_name = cfg.get("embedder", {}).get("model", "")
+        return next((k for k, v in SUPPORTED_MODELS.items() if v == hf_name), "95M")
+    except Exception:
+        return "95M"
+
+
+def build_model_step_args(model_key: str, base_step_args: dict) -> dict:
+    """
+    Fuegt modellspezifische CLI-Argumente zu den Schritt-Argumenten hinzu.
+
+    Schritte die betroffen sind:
+      embeddings → --model <hf-name>
+      train      → --embedder <key>
+      evaluate   → --embedder <key>
+    """
+    step_args = {k: list(v) for k, v in base_step_args.items()}
+    step_args["embeddings"] = ["--model", SUPPORTED_MODELS[model_key]]
+    step_args["train"]      = step_args.get("train", []) + ["--embedder", model_key]
+    step_args["evaluate"]   = step_args.get("evaluate", ["--save-report"]) + ["--embedder", model_key]
+    return step_args
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -200,26 +233,40 @@ def run_pipeline(steps: list[str], step_args: dict[str, list[str]] = None) -> di
 # PIPELINE-STATUS
 # ══════════════════════════════════════════════════════════════════════════════
 
-def check_pipeline_status(paths: dict):
+def check_pipeline_status(paths: dict, model_key: str = None):
     """Zeigt den aktuellen Status der Pipeline-Outputs."""
     metadata_dir = paths.get("metadata")
     previews_dir = paths.get("previews")
-    embeddings_dir = paths.get("embeddings")
+    embeddings_base = paths.get("embeddings")
     models_dir = paths.get("models")
     reports_dir = paths.get("reports")
 
     jsonl_path = get_tracks_jsonl_path(metadata_dir)
 
+    # Embeddings-Unterverzeichnis je nach gewaehltem Modell
+    if model_key and model_key in SUPPORTED_MODELS:
+        model_short = SUPPORTED_MODELS[model_key].split("/")[-1]
+        embeddings_dir = embeddings_base / model_short
+        model_label = f"Embeddings [{model_key}]"
+    else:
+        embeddings_dir = embeddings_base
+        model_label = "Embeddings"
+
+    # Neustes Modell suchen
+    model_files = sorted(models_dir.glob("spotilyzer_model_*.joblib"),
+                         key=lambda p: p.stat().st_mtime, reverse=True) if models_dir.exists() else []
+    newest_model = model_files[0] if model_files else models_dir / "spotilyzer_model.joblib"
+
     print(f"\n{'=' * 79}")
-    print(f"  PIPELINE STATUS")
+    print(f"  PIPELINE STATUS  (Embedder: {model_key or 'auto'})")
     print(f"{'=' * 79}")
 
     checks = [
         ("tracks.jsonl", jsonl_path),
         ("Previews (MP3s)", previews_dir),
-        ("embeddings.npy", embeddings_dir / "embeddings.npy"),
-        ("embeddings_meta.csv", embeddings_dir / "embeddings_meta.csv"),
-        ("spotilyzer_model.joblib", models_dir / "spotilyzer_model.joblib"),
+        (f"{model_label}/embeddings.npy", embeddings_dir / "embeddings.npy"),
+        (f"{model_label}/embeddings_meta.csv", embeddings_dir / "embeddings_meta.csv"),
+        (f"Modell ({newest_model.name})", newest_model),
         ("training_report.json", reports_dir / "training_report.json"),
         ("evaluation_report.json", reports_dir / "evaluation_report.json"),
     ]
@@ -266,18 +313,23 @@ def check_pipeline_status(paths: dict):
 # INTERAKTIVES MENUE
 # ══════════════════════════════════════════════════════════════════════════════
 
-def interactive_menu(paths: dict):
+def interactive_menu(paths: dict, initial_model_key: str = None):
     """Zeigt interaktives Menue fuer Pipeline-Steuerung."""
 
-    # Standard-Argumente fuer Schritte
-    default_step_args = {
+    selected_model = initial_model_key or _default_model_key()
+
+    # Basis-Argumente (modellunabhaengig)
+    base_step_args = {
         "scout": ["--charts", "DE", "US", "UK", "FR", "BR", "ES", "GLOBAL"],
-        "evaluate": ["--save-report"],
     }
 
     while True:
+        model_name = SUPPORTED_MODELS[selected_model]
+        step_args = build_model_step_args(selected_model, base_step_args)
+
         print(f"\n{'=' * 79}")
         print(f"  SPOTILYZER TRAINING PIPELINE")
+        print(f"  Embedder: {selected_model}  ({model_name})")
         print(f"{'=' * 79}")
         print()
         print(f"  Pipeline-Schritte:")
@@ -285,14 +337,21 @@ def interactive_menu(paths: dict):
         print(f"    2. Download    - Preview-MP3s herunterladen (MD5-Sharding)")
         print(f"    3. Enrich      - Last.fm-Enrichment")
         print(f"    4. Labels      - Multi-Source-Label-Berechnung")
-        print(f"    5. Embeddings  - MERT-Embedding-Extraktion")
-        print(f"    6. Train       - XGBoost-Training (mit sample_weight)")
-        print(f"    7. Evaluate    - Modell-Evaluation")
+        print(f"    5. Embeddings  - MERT-Embedding-Extraktion  [{selected_model}]")
+        print(f"    6. Train       - XGBoost-Training  [{selected_model}]")
+        print(f"    7. Evaluate    - Modell-Evaluation  [{selected_model}]")
         print()
         print(f"  Kombinationen:")
-        print(f"    F. Full Pipeline   (alle Schritte)")
-        print(f"    T. Train Only      (Labels + Train + Evaluate)")
-        print(f"    E. Enrich + Train  (Enrich + Labels + Train + Evaluate)")
+        print(f"    F. Full Pipeline   (alle Schritte)  [{selected_model}]")
+        print(f"    T. Train Only      (Embeddings + Train + Evaluate)  [{selected_model}]")
+        print(f"    E. Enrich + Train  (Enrich + Labels + T)  [{selected_model}]")
+        print()
+        print(f"  Modell:")
+        model_opts = "  /  ".join(
+            f"[{k}]" if k == selected_model else k
+            for k in SUPPORTED_MODELS
+        )
+        print(f"    M. Embedder wechseln  ({model_opts})")
         print()
         print(f"  Sonstiges:")
         print(f"    S. Status anzeigen")
@@ -304,10 +363,14 @@ def interactive_menu(paths: dict):
         if choice == "Q":
             print("  Beendet.")
             break
+        elif choice == "M":
+            keys = list(SUPPORTED_MODELS.keys())
+            selected_model = keys[(keys.index(selected_model) + 1) % len(keys)]
+            print(f"  Embedder gewechselt zu: {selected_model}  ({SUPPORTED_MODELS[selected_model]})")
         elif choice == "S":
-            check_pipeline_status(paths)
+            check_pipeline_status(paths, model_key=selected_model)
         elif choice == "1":
-            run_step("scout", default_step_args.get("scout"))
+            run_step("scout", step_args.get("scout"))
         elif choice == "2":
             run_step("download")
         elif choice == "3":
@@ -315,22 +378,22 @@ def interactive_menu(paths: dict):
         elif choice == "4":
             run_step("labels")
         elif choice == "5":
-            run_step("embeddings")
+            run_step("embeddings", step_args.get("embeddings"))
         elif choice == "6":
-            run_step("train")
+            run_step("train", step_args.get("train"))
         elif choice == "7":
-            run_step("evaluate", default_step_args.get("evaluate"))
+            run_step("evaluate", step_args.get("evaluate"))
         elif choice == "F":
-            run_pipeline(PIPELINE_ORDER, step_args=default_step_args)
+            run_pipeline(PIPELINE_ORDER, step_args=step_args)
         elif choice == "T":
             run_pipeline(
-                ["labels", "train", "evaluate"],
-                step_args=default_step_args,
+                ["embeddings", "train", "evaluate"],
+                step_args=step_args,
             )
         elif choice == "E":
             run_pipeline(
-                ["enrich", "labels", "train", "evaluate"],
-                step_args=default_step_args,
+                ["enrich", "labels", "embeddings", "train", "evaluate"],
+                step_args=step_args,
             )
         else:
             print(f"  Unbekannte Auswahl: {choice}")
@@ -348,16 +411,25 @@ def main():
     parser = argparse.ArgumentParser(
         description="SpotilyzerTraining Pipeline-Orchestrierung"
     )
+    parser.add_argument(
+        "--model", "-m",
+        choices=list(SUPPORTED_MODELS.keys()),
+        default=None,
+        help=f"Embedder-Modell ({' | '.join(SUPPORTED_MODELS.keys())}, default: aus training.yaml)"
+    )
     parser.add_argument("--full", action="store_true", help="Komplette Pipeline ausfuehren")
     parser.add_argument("--scout", action="store_true", help="Nur Deezer-Scouting")
     parser.add_argument("--download", action="store_true", help="Nur Preview-Download")
     parser.add_argument("--enrich", action="store_true", help="Nur Last.fm-Enrichment")
     parser.add_argument("--labels", action="store_true", help="Nur Label-Berechnung")
     parser.add_argument("--embeddings", action="store_true", help="Nur Embedding-Extraktion")
-    parser.add_argument("--train", action="store_true", help="Nur Training (Labels + Train + Evaluate)")
+    parser.add_argument("--train", action="store_true", help="Embeddings + Train + Evaluate")
     parser.add_argument("--evaluate", action="store_true", help="Nur Evaluation")
     parser.add_argument("--status", action="store_true", help="Pipeline-Status anzeigen")
     args = parser.parse_args()
+
+    # Modell-Auswahl: CLI > training.yaml > Fallback 95M
+    model_key = args.model or _default_model_key()
 
     # Logging
     logger = setup_logging("pipeline", log_dir=paths.get("logs"))
@@ -367,23 +439,23 @@ def main():
         if key in paths:
             ensure_dir(paths[key])
 
-    # Standard-Argumente fuer Schritte
-    default_step_args = {
+    # Basis-Argumente (modellunabhaengig)
+    base_step_args = {
         "scout": ["--charts", "DE", "US", "UK", "FR", "BR", "ES", "GLOBAL"],
-        "evaluate": ["--save-report"],
     }
+    step_args = build_model_step_args(model_key, base_step_args)
 
     # CLI-Modus
     if args.status:
-        check_pipeline_status(paths)
+        check_pipeline_status(paths, model_key=model_key)
         return
 
     if args.full:
-        run_pipeline(PIPELINE_ORDER, step_args=default_step_args)
+        run_pipeline(PIPELINE_ORDER, step_args=step_args)
         return
 
     if args.scout:
-        run_step("scout", default_step_args.get("scout"))
+        run_step("scout", step_args.get("scout"))
         return
 
     if args.download:
@@ -399,22 +471,22 @@ def main():
         return
 
     if args.embeddings:
-        run_step("embeddings")
+        run_step("embeddings", step_args.get("embeddings"))
         return
 
     if args.train:
         run_pipeline(
-            ["labels", "train", "evaluate"],
-            step_args=default_step_args,
+            ["embeddings", "train", "evaluate"],
+            step_args=step_args,
         )
         return
 
     if args.evaluate:
-        run_step("evaluate", default_step_args.get("evaluate"))
+        run_step("evaluate", step_args.get("evaluate"))
         return
 
     # Kein Flag → interaktives Menue
-    interactive_menu(paths)
+    interactive_menu(paths, initial_model_key=model_key)
 
 
 if __name__ == "__main__":

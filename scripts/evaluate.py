@@ -266,23 +266,39 @@ def main():
     metadata_dir = paths.get("metadata")
     jsonl_path = get_tracks_jsonl_path(metadata_dir)
     models_dir = paths.get("models", Path("./outputs/models"))
-    # Neuestes spotilyzer_model_*.joblib bevorzugen, Fallback auf legacy-Name
-    _glob_models = sorted(models_dir.glob("spotilyzer_model_*.joblib"), key=lambda p: p.stat().st_mtime, reverse=True)
-    default_model = str(_glob_models[0] if _glob_models else models_dir / "spotilyzer_model.joblib")
-    default_embeddings = str(paths.get("embeddings", "./outputs/embeddings"))
+    embeddings_base = paths.get("embeddings", Path("./outputs/embeddings"))
+
+    _EMBEDDER_HF  = {"95M": "m-a-p/MERT-v1-95M", "330M": "m-a-p/MERT-v1-330M"}
+    _EMBEDDER_TAG = {"95M": "MERTv195M",           "330M": "MERTv1330M"}
+
+    # Neuestes Modell als Default (ohne Embedder-Filter)
+    _glob_all = sorted(models_dir.glob("spotilyzer_model_*.joblib"),
+                       key=lambda p: p.stat().st_mtime, reverse=True)
+    default_model = str(_glob_all[0] if _glob_all else models_dir / "spotilyzer_model.joblib")
+
+    # Default embeddings: aus training.yaml ableiten
+    cfg_model = training_cfg.get("embedder", {}).get("model", "")
+    cfg_short = cfg_model.split("/")[-1] if cfg_model else ""
+    default_embeddings = str(embeddings_base / cfg_short if cfg_short else embeddings_base)
 
     parser = argparse.ArgumentParser(
         description="Evaluiere trainiertes Spotilyzer-Modell"
     )
     parser.add_argument(
+        "--embedder",
+        choices=list(_EMBEDDER_HF.keys()),
+        default=None,
+        help="Embedder-Kurzname (95M | 330M) — leitet --embeddings-dir und --model automatisch ab"
+    )
+    parser.add_argument(
         "--model",
         default=default_model,
-        help=f"Pfad zum .joblib-Modell (default: {default_model})"
+        help=f"Pfad zum .joblib-Modell (default: neuestes in models/)"
     )
     parser.add_argument(
         "--embeddings-dir",
         default=default_embeddings,
-        help=f"Verzeichnis mit Embeddings (default: {default_embeddings})"
+        help=f"Verzeichnis mit Embeddings (default: aus training.yaml = {default_embeddings})"
     )
     parser.add_argument(
         "--save-report",
@@ -291,12 +307,26 @@ def main():
     )
     args = parser.parse_args()
 
+    # --embedder überschreibt --model und --embeddings-dir
+    if args.embedder:
+        tag = _EMBEDDER_TAG[args.embedder]
+        model_short = _EMBEDDER_HF[args.embedder].split("/")[-1]
+        args.embeddings_dir = str(embeddings_base / model_short)
+        # Neustes Modell mit passendem Embedder-Tag
+        tagged = sorted(models_dir.glob(f"spotilyzer_model_{tag}_*.joblib"),
+                        key=lambda p: p.stat().st_mtime, reverse=True)
+        if tagged:
+            args.model = str(tagged[0])
+        # sonst bleibt default_model
+
     # Logging
     logger = setup_logging("evaluation", log_dir=paths.get("logs"))
 
     print(f"{'=' * 79}")
     print(f"  SPOTILYZER MODEL EVALUATION")
     print(f"{'=' * 79}")
+    if args.embedder:
+        print(f"  Embedder:  {args.embedder}  ({_EMBEDDER_HF[args.embedder]})")
 
     model_path = Path(args.model)
     embeddings_dir = Path(args.embeddings_dir)
