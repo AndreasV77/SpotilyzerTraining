@@ -64,9 +64,13 @@ def load_evaluation_data(
     embeddings_dir: Path,
     jsonl_path: Path,
     sample_weights_cfg: dict,
+    validated_only: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
     """
     Laedt Embeddings + Labels aus tracks.jsonl fuer Evaluation.
+
+    Args:
+        validated_only: Nur Tracks mit robustness='validated' evaluieren.
 
     Returns:
         (X, sample_weights, merged_df)
@@ -75,10 +79,14 @@ def load_evaluation_data(
     meta_df = pd.read_csv(embeddings_dir / "embeddings_meta.csv")
     tracks_dict = read_tracks_as_dict(jsonl_path)
 
+    if validated_only:
+        print("  Filter: nur validated-Tracks (contested + single_source werden uebersprungen)")
+
     labels = []
     robustness_list = []
     weights = []
     valid_mask = []
+    skipped_robustness = 0
 
     for _, row in meta_df.iterrows():
         tid = int(row["track_id"])
@@ -86,13 +94,22 @@ def load_evaluation_data(
         label = track.get("label")
         robustness = track.get("robustness", "single_source")
 
-        if label is not None:
-            labels.append(label)
-            robustness_list.append(robustness)
-            weights.append(sample_weights_cfg.get(robustness, 0.5))
-            valid_mask.append(True)
-        else:
+        if label is None:
             valid_mask.append(False)
+            continue
+
+        if validated_only and robustness != "validated":
+            skipped_robustness += 1
+            valid_mask.append(False)
+            continue
+
+        labels.append(label)
+        robustness_list.append(robustness)
+        weights.append(sample_weights_cfg.get(robustness, 0.5))
+        valid_mask.append(True)
+
+    if skipped_robustness > 0:
+        print(f"    {skipped_robustness} Tracks durch validated_only-Filter entfernt")
 
     valid_mask = np.array(valid_mask)
     valid_indices = meta_df.loc[valid_mask, "embedding_idx"].values
@@ -305,6 +322,11 @@ def main():
         action="store_true",
         help="Speichere Report als JSON"
     )
+    parser.add_argument(
+        "--validated-only",
+        action="store_true",
+        help="Nur Tracks mit robustness='validated' evaluieren (contested + single_source werden ausgeschlossen)"
+    )
     args = parser.parse_args()
 
     # --embedder überschreibt --model und --embeddings-dir
@@ -312,9 +334,17 @@ def main():
         tag = _EMBEDDER_TAG[args.embedder]
         model_short = _EMBEDDER_HF[args.embedder].split("/")[-1]
         args.embeddings_dir = str(embeddings_base / model_short)
-        # Neustes Modell mit passendem Embedder-Tag
-        tagged = sorted(models_dir.glob(f"spotilyzer_model_{tag}_*.joblib"),
-                        key=lambda p: p.stat().st_mtime, reverse=True)
+        # Neustes Modell mit passendem Embedder-Tag + optionalem validated-Filter
+        if args.validated_only:
+            tagged = sorted(models_dir.glob(f"spotilyzer_model_{tag}_validated_*.joblib"),
+                            key=lambda p: p.stat().st_mtime, reverse=True)
+        else:
+            # Modelle ohne validated-Tag bevorzugen (nicht auf _validated_ matchen)
+            all_tagged = sorted(models_dir.glob(f"spotilyzer_model_{tag}_*.joblib"),
+                                key=lambda p: p.stat().st_mtime, reverse=True)
+            tagged = [p for p in all_tagged if "_validated_" not in p.name]
+            if not tagged:
+                tagged = all_tagged  # Fallback: beliebiges Modell mit diesem Tag
         if tagged:
             args.model = str(tagged[0])
         # sonst bleibt default_model
@@ -327,6 +357,8 @@ def main():
     print(f"{'=' * 79}")
     if args.embedder:
         print(f"  Embedder:  {args.embedder}  ({_EMBEDDER_HF[args.embedder]})")
+    if args.validated_only:
+        print(f"  Filter:    validated_only=True  (contested + single_source werden ausgeschlossen)")
 
     model_path = Path(args.model)
     embeddings_dir = Path(args.embeddings_dir)
@@ -363,6 +395,7 @@ def main():
     print(f"\n  Lade Evaluations-Daten...")
     X, sample_weights, merged_df = load_evaluation_data(
         embeddings_dir, jsonl_path, sample_weights_cfg,
+        validated_only=args.validated_only,
     )
     print(f"    Samples: {X.shape[0]}")
     print(f"    Features: {X.shape[1]}")
@@ -396,7 +429,8 @@ def main():
             "target_metrics": target_metrics,
         }
 
-        report_path = reports_dir / "evaluation_report.json"
+        filter_tag = "_validated" if args.validated_only else ""
+        report_path = reports_dir / f"evaluation_report{filter_tag}.json"
         with open(report_path, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
         print(f"\n  Report gespeichert: {report_path}")
