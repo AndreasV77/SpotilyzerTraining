@@ -6,7 +6,7 @@ embedder:
   model: "m-a-p/MERT-v1-95M"   # Optionen: "m-a-p/MERT-v1-95M" | "m-a-p/MERT-v1-330M"
 
 # Optionales Experiment-Label (erscheint im Modell-Dateinamen, leer lassen wenn nicht benötigt)
-# Beispiel: experiment_label: "origparams"  → spotilyzer_model_MERTv195M_origparams_validated_20260318.joblib
+# Beispiel: experiment_label: ""  → spotilyzer_model_MERTv195M_origparams_validated_20260318.joblib
 experiment_label: ""
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -21,11 +21,11 @@ experiment_label: ""
 models:
   MERT-v1-95M:
     params:
-      n_estimators: 500        # early stopping findet das Optimum
-      max_depth: 6             # 768-dim: tiefere Bäume vertretbar
+      n_estimators: 500        # Hoch setzen — early stopping findet das Optimum
+      max_depth: 6
       learning_rate: 0.05
       subsample: 0.8
-      colsample_bytree: 0.8    # 768-dim: mehr Features pro Baum
+      colsample_bytree: 0.8
       min_child_weight: 3
       gamma: 0.1
       reg_alpha: 0.5

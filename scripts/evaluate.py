@@ -343,25 +343,24 @@ def main():
     )
     args = parser.parse_args()
 
-    # --embedder überschreibt --model und --embeddings-dir
+    # --embedder setzt embeddings-dir und (wenn kein explizites --model) das Modell automatisch
     if args.embedder:
         tag = _EMBEDDER_TAG[args.embedder]
         model_short = _EMBEDDER_HF[args.embedder].split("/")[-1]
         args.embeddings_dir = str(embeddings_base / model_short)
-        # Neustes Modell mit passendem Embedder-Tag + optionalem validated-Filter
-        if args.validated_only:
-            tagged = sorted(models_dir.glob(f"spotilyzer_model_{tag}_validated_*.joblib"),
-                            key=lambda p: p.stat().st_mtime, reverse=True)
-        else:
-            # Modelle ohne validated-Tag bevorzugen (nicht auf _validated_ matchen)
-            all_tagged = sorted(models_dir.glob(f"spotilyzer_model_{tag}_*.joblib"),
+        # Modell-Autodetect nur wenn kein explizites --model übergeben wurde
+        if args.model == default_model:
+            if args.validated_only:
+                tagged = sorted(models_dir.glob(f"spotilyzer_model_{tag}_validated_*.joblib"),
                                 key=lambda p: p.stat().st_mtime, reverse=True)
-            tagged = [p for p in all_tagged if "_validated_" not in p.name]
-            if not tagged:
-                tagged = all_tagged  # Fallback: beliebiges Modell mit diesem Tag
-        if tagged:
-            args.model = str(tagged[0])
-        # sonst bleibt default_model
+            else:
+                all_tagged = sorted(models_dir.glob(f"spotilyzer_model_{tag}_*.joblib"),
+                                    key=lambda p: p.stat().st_mtime, reverse=True)
+                tagged = [p for p in all_tagged if "_validated_" not in p.name]
+                if not tagged:
+                    tagged = all_tagged
+            if tagged:
+                args.model = str(tagged[0])
 
     # Logging
     logger = setup_logging("evaluation", log_dir=paths.get("logs"))

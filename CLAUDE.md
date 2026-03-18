@@ -3,7 +3,7 @@
 Arbeitsdokument für das Modell-Training-Subprojekt von Spotilyzer.
 
 **Erstellt:** 2026-03-07
-**Zuletzt aktualisiert:** 2026-03-17 (Modell-Auswahl, Naming-Schema, aktueller Trainingsstatus)
+**Zuletzt aktualisiert:** 2026-03-18 (validated-only Training, Holdout-Fix, Per-Embedder-Params, Experiment-Label)
 
 ---
 
@@ -61,19 +61,25 @@ Copy-Item outputs/reports/training_report_MERTv195M_*.json ..\Spotilyzer\models\
 
 Verbesserung des Hit/Mid/Flop-Klassifikators für Spotilyzer.
 
-### Aktueller Modellstand (Stand 2026-03-17)
+### Aktueller Modellstand (Stand 2026-03-18)
 
-| Modell | Datensatz | BA | Hit Recall | Flop Recall | Status |
-|--------|-----------|-----|------------|-------------|--------|
-| `MERTv1330M_20260317` | 8738 Samples, bug-fixed | 51.3% | 15.2% | 59.6% | Aktives Modell (Spotilyzer) |
-| `MERTv195M_20260317` | 8738 Samples, bug-fixed | 47.8% | 5.6% | 48.6% | Trainiert, noch nicht deployed |
-| `MERTv195M_20260302` | 5600 Samples, label-bug | 62.5% | 93.6%* | 26.8%* | Veraltet (*bug) |
+Alle Metriken auf echtem Holdout-Set (20%, 963 Samples). Datensatz: 4813 validated-only Samples.
 
-**Befund:** 95M schlechter als 330M auf dem gleichen Datensatz. 626 Hits (7.2%) zu wenig für beide Modelle. Kernproblem: Hit-Klassenunterrepräsentation.
+| Modell | Params | BA | Hit R. | Flop R. | Status |
+|--------|--------|----|--------|---------|--------|
+| `MERTv1330M_validated_20260318` | tuned | 55.7% | 30.4% | 72.3% | Aktiv |
+| `MERTv195M_validated_20260318` | tuned | 53.8% | 27.2% | 70.4% | Trainiert |
+| `MERTv195M_origparams_validated_20260318` | original | 52.6% | 24.8% | 69.2% | Referenz |
 
-**Priorität:** Mehr Hit-Samples (IT, MX, CA, AU, JP Charts, Ziel ≥2000 Hits) > Modell-Tuning.
+**Ursachenanalyse der früheren 26% Flop Recall:** 3900 "contested" Tracks (Deezer/Last.fm Widerspruch) wurden alle als "mid" gelabelt → Mid von 2114 auf 6032 aufgebläht (3×). Behobener Datensatz via `--validated-only`.
 
-**Ziel (mittelfristig):** Flop Recall ≥ 50% bei Hit Recall ≥ 80%, ≥2000 Hit-Samples
+**Aktuelles Kernproblem:** Hit Recall 27–30% trotz balanciertem Datensatz. Ursache: nur 623 Hit-Samples (12.9%), zu ähnlich zu Mid. Flop Recall-Ziel (≥50%) erreicht.
+
+**Parameter-Befund (95M):** Tuned vs. origparams → marginaler Unterschied (+1.2% BA). Die Regularisierungsanpassungen waren auf dem kleinen Datensatz leicht vorteilhaft, aber nicht entscheidend. Bei größerem Datensatz könnte origparams kompetitiver sein.
+
+**Stehende Testregel:** Bei jedem neuen Datensatz BEIDE 95M-Varianten testen (`origparams` + `tuned`).
+
+**Nächste Priorität:** Mehr Hit-Samples (Ziel ≥2000) durch Chart-Erweiterung.
 
 ---
 
@@ -188,7 +194,8 @@ SpotilyzerTraining/
 │   ├── compute_labels.py        # Multi-Source-Label-Berechnung
 │   ├── extract_embeddings.py    # MERT-Embedding-Extraktion
 │   ├── train_model.py           # XGBoost-Training mit Sample Weights
-│   ├── evaluate.py              # Metriken + Confusion Matrix
+│   ├── evaluate.py              # Metriken + Confusion Matrix (Holdout-Set aus Bundle)
+│   ├── inspect_dataset.py       # Read-only Diagnose-Tool (Label-Verteilung, Robustheit, etc.)
 │   ├── _utils.py                # Shared helpers (logging, config-loader)
 │   └── utils/
 │       ├── __init__.py
@@ -261,22 +268,28 @@ New-Item -ItemType Directory -Force -Path "G:\Dev\SpotilyzerData\playlists"
 ### Modi
 
 ```powershell
-# Interaktives Menü (zeigt aktives Embedder-Modell, M zum Wechseln)
+# Interaktives Menü (M = Embedder wechseln, V = validated-only toggle)
 python scripts/run_pipeline.py
 
-# Mit Modell-Auswahl:
-python scripts/run_pipeline.py --model 95M     # MERT-v1-95M (Standard aus training.yaml)
-python scripts/run_pipeline.py --model 330M    # MERT-v1-330M
-
-# Direkte Schritte mit --train:
-python scripts/run_pipeline.py --train --model 95M   # Embeddings + Train + Evaluate
-python scripts/run_pipeline.py --status --model 330M # Status-Check für 330M
+# Mit Flags:
+python scripts/run_pipeline.py --model 95M --validated-only
+python scripts/run_pipeline.py --model 330M --validated-only
 
 # Einzelne Skripte direkt:
-python scripts/extract_embeddings.py --model 95M     # → outputs/embeddings/MERT-v1-95M/
-python scripts/train_model.py --embedder 95M         # → spotilyzer_model_MERTv195M_*.joblib
-python scripts/evaluate.py --embedder 95M --save-report
+python scripts/extract_embeddings.py --model 95M
+python scripts/train_model.py --embedder 95M --validated-only
+python scripts/evaluate.py --embedder 95M --validated-only --save-report
+
+# Explizites Modell evaluieren (bei experiment_label nötig, da Autodetect nicht greift):
+python scripts/evaluate.py --model outputs/models/spotilyzer_model_MERTv195M_origparams_validated_20260318.joblib --embedder 95M --validated-only --save-report
+
+# Datensatz-Diagnose (read-only, kein Training):
+python scripts/inspect_dataset.py                    # Konsole
+python scripts/inspect_dataset.py --report           # + JSON nach outputs/reports/
+python scripts/inspect_dataset.py --validated-only   # Nur validated-Subset analysieren
 ```
+
+**experiment_label in training.yaml:** Optionales Freitext-Label, das im Modell- und Report-Dateinamen erscheint (`experiment_label: "origparams"`). Nach Abschluss des Experiments auf `""` zurücksetzen.
 
 **WICHTIG:** Schritte 1–4 (Scout/Download/Enrich/Labels) nur bei Datensatz-Erweiterung ausführen. Für reines Neutraining eines Modells nur Schritte 5–7 (Embeddings → Train → Evaluate).
 
@@ -318,12 +331,16 @@ python scripts/analyze_clusters.py --full --output outputs/reports/cluster_analy
 5. extract_embeddings.py [--model 95M|330M]
     ↓ outputs/embeddings/MERT-v1-{version}/embeddings.npy + embeddings_meta.csv + embeddings_info.json
     (Checkpoint/Resume: --resume Flag, speichert alle 500 Tracks)
-6. train_model.py [--embedder 95M|330M]
-    ↓ outputs/models/spotilyzer_model_{tag}_{date}.joblib + training_report.json
-    (Label-fix: alphabetical LabelEncoder → target_names=["flop","hit","mid"])
+6. train_model.py [--embedder 95M|330M] [--validated-only]
+    ↓ outputs/models/spotilyzer_model_{tag}[_{exp_label}][_validated]_{date}.joblib
+    ↓ outputs/reports/training_report_{tag}[_{exp_label}]_{date}.json
     (Sample weights: compute_sample_weight("balanced") × robustness weights)
-7. evaluate.py [--embedder 95M|330M] [--save-report]
-    ↓ outputs/reports/training_report_{tag}_{date}.json
+    (test_track_ids werden im Bundle gespeichert → Holdout-Evaluation in evaluate.py)
+    (Per-Embedder-Params aus training.yaml: models.MERT-v1-95M / models.MERT-v1-330M)
+7. evaluate.py [--embedder 95M|330M] [--validated-only] [--save-report]
+    ↓ outputs/reports/evaluation_report_{model_suffix}.json
+    (Testet nur auf Holdout-Set aus Bundle — nicht auf Trainingsdaten!)
+    (--model explizit angeben wenn experiment_label im Dateinamen vorhanden)
 ```
 
 ---
@@ -544,53 +561,72 @@ composite_score:
 ### configs/training.yaml
 
 ```yaml
-# Aktives Embedder-Modell (bestimmt Embedding-Unterordner + default XGBoost-Params)
 embedder:
   model: "m-a-p/MERT-v1-95M"   # Optionen: "m-a-p/MERT-v1-95M" | "m-a-p/MERT-v1-330M"
-  # 95M  (768-dim)  → max_depth: 6, colsample_bytree: 0.8
-  # 330M (1024-dim) → max_depth: 4, colsample_bytree: 0.6
 
+# Optionales Experiment-Label (erscheint im Dateinamen, leer lassen wenn nicht benötigt)
+experiment_label: ""   # z.B. "origparams" → spotilyzer_model_MERTv195M_origparams_validated_*.joblib
+
+# Per-Embedder XGBoost-Parameter (train_model.py liest zuerst models.<short-name>.params)
+# 95M  (768-dim):  max_depth=6, colsample=0.8 (weniger Overfitting-Gefahr)
+# 330M (1024-dim): max_depth=4, colsample=0.6 (mehr Regularisierung für höhere Dim)
+models:
+  MERT-v1-95M:
+    params:
+      n_estimators: 500
+      max_depth: 6
+      learning_rate: 0.05
+      subsample: 0.8
+      colsample_bytree: 0.8
+      min_child_weight: 3
+      gamma: 0.1
+      reg_alpha: 0.5
+      reg_lambda: 2
+      objective: "multi:softprob"
+      num_class: 3
+      eval_metric: "mlogloss"
+  MERT-v1-330M:
+    params:
+      n_estimators: 500
+      max_depth: 4
+      learning_rate: 0.05
+      subsample: 0.8
+      colsample_bytree: 0.6
+      min_child_weight: 3
+      gamma: 0.1
+      reg_alpha: 0.5
+      reg_lambda: 2
+      objective: "multi:softprob"
+      num_class: 3
+      eval_metric: "mlogloss"
+
+# Fallback wenn kein per-Embedder-Eintrag vorhanden
 model:
   type: xgboost
-  params:
-    n_estimators: 500        # early stopping findet Optimum
-    max_depth: 6             # 95M: 6; 330M: 4
-    learning_rate: 0.05
-    subsample: 0.8
-    colsample_bytree: 0.8    # 95M: 0.8; 330M: 0.6
-    min_child_weight: 3
-    gamma: 0.1
-    reg_alpha: 0.5
-    reg_lambda: 2
+  params: { ... }  # wie MERT-v1-95M
 
 early_stopping_rounds: 30
-
-validation:
-  strategy: stratified_kfold
-  n_splits: 5
-  shuffle: true
+random_state: 42
 
 target_metrics:
   flop_recall_min: 0.50
   hit_recall_min: 0.80
   balanced_accuracy_min: 0.65
-
-random_state: 42
 ```
 
 ---
 
 ## Ziel-Metriken
 
-| Metrik | 95M_20260317 | 330M_20260317 | Ziel |
-|--------|--------------|---------------|------|
-| Flop Recall | 48.6% | 59.6% ✓ | ≥ 50% |
-| Hit Recall | 5.6% ✗ | 15.2% ✗ | ≥ 80% |
-| Balanced Accuracy | 47.8% ✗ | 51.3% ✗ | ≥ 65% |
+Alle Werte auf echtem Holdout-Set (20%). Datensatz: 4813 validated, 963 Holdout.
 
-**Fazit:** Kein Modell erreicht die Ziele. Bottleneck: 626 Hit-Samples (7.2% des Datensatzes). Hauptmaßnahme: mehr Hit-Daten, nicht Hyperparameter-Tuning.
+| Metrik | 95M_orig | 95M_tuned | 330M_tuned | Ziel |
+|--------|----------|-----------|------------|------|
+| Flop Recall | 69.2% ✓ | 70.4% ✓ | **72.3%** ✓ | ≥ 50% |
+| Hit Recall | 24.8% ✗ | 27.2% ✗ | **30.4%** ✗ | ≥ 80% |
+| Balanced Accuracy | 52.6% ✗ | 53.8% ✗ | **55.7%** ✗ | ≥ 65% |
 
-*Alter 95M_20260302 mit label-bug nicht mehr relevant.*
+**Flop Recall-Ziel erreicht.** Hit Recall bleibt kritisches Problem — 623 Hits (12.9%) zu wenig, zu ähnlich zu Mid. Nächste Maßnahme: mehr Hit-Samples durch Chart-Erweiterung.
 
 ---
 
