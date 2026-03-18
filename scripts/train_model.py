@@ -472,9 +472,16 @@ def main():
         print(f"\n  [DRY RUN] Training uebersprungen.")
         return
 
-    # XGBoost-Parameter aus Config
-    model_cfg = training_cfg.get("model", {})
-    xgb_params = model_cfg.get("params", {})
+    # XGBoost-Parameter: per-Embedder (Priorität) → Fallback auf model.params
+    embedder_short = cfg_model.split("/")[-1] if cfg_model else ""
+    per_embedder_params = training_cfg.get("models", {}).get(embedder_short, {}).get("params")
+    fallback_params = training_cfg.get("model", {}).get("params", {})
+    xgb_params = per_embedder_params if per_embedder_params else fallback_params
+    params_source = f"models.{embedder_short}" if per_embedder_params else "model (Fallback)"
+    print(f"  XGBoost-Parameter: {params_source}")
+    if logger:
+        logger.info(f"XGBoost-Parameter aus: {params_source}")
+
     random_state = training_cfg.get("random_state", 42)
     target_metrics = training_cfg.get("target_metrics", {})
     early_stopping_rounds = training_cfg.get("early_stopping_rounds", 30)
@@ -515,8 +522,10 @@ def main():
             pass
 
     date_tag = datetime.now().strftime("%Y%m%d")
+    exp_label = training_cfg.get("experiment_label", "").strip()
+    exp_tag = f"_{exp_label}" if exp_label else ""
     filter_tag = "_validated" if args.validated_only else ""
-    model_filename = f"spotilyzer_model_{embedder_tag}{filter_tag}_{date_tag}.joblib"
+    model_filename = f"spotilyzer_model_{embedder_tag}{exp_tag}{filter_tag}_{date_tag}.joblib"
     model_path = output_dir / model_filename
 
     model_data = {
@@ -546,14 +555,16 @@ def main():
         },
         "model": {
             "type": "XGBClassifier",
+            "params_source": params_source,
             "params": xgb_params,
+            "experiment_label": exp_label or None,
             "sample_weight": True,
         },
         "metrics": metrics,
         "target_metrics": target_metrics,
     }
 
-    report_path = reports_dir / f"training_report_{embedder_tag}_{date_tag}.json"
+    report_path = reports_dir / f"training_report_{embedder_tag}{exp_tag}_{date_tag}.json"
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
     print(f"  Report gespeichert: {report_path}")
