@@ -98,19 +98,22 @@ def _default_model_key() -> str:
         return "95M"
 
 
-def build_model_step_args(model_key: str, base_step_args: dict) -> dict:
+def build_model_step_args(model_key: str, base_step_args: dict, validated_only: bool = False) -> dict:
     """
     Fuegt modellspezifische CLI-Argumente zu den Schritt-Argumenten hinzu.
 
     Schritte die betroffen sind:
       embeddings → --model <hf-name>
-      train      → --embedder <key>
-      evaluate   → --embedder <key>
+      train      → --embedder <key>  [--validated-only]
+      evaluate   → --embedder <key>  [--validated-only]
     """
     step_args = {k: list(v) for k, v in base_step_args.items()}
     step_args["embeddings"] = ["--model", SUPPORTED_MODELS[model_key]]
     step_args["train"]      = step_args.get("train", []) + ["--embedder", model_key]
     step_args["evaluate"]   = step_args.get("evaluate", ["--save-report"]) + ["--embedder", model_key]
+    if validated_only:
+        step_args["train"]    = step_args["train"] + ["--validated-only"]
+        step_args["evaluate"] = step_args["evaluate"] + ["--validated-only"]
     return step_args
 
 
@@ -313,10 +316,11 @@ def check_pipeline_status(paths: dict, model_key: str = None):
 # INTERAKTIVES MENUE
 # ══════════════════════════════════════════════════════════════════════════════
 
-def interactive_menu(paths: dict, initial_model_key: str = None):
+def interactive_menu(paths: dict, initial_model_key: str = None, initial_validated_only: bool = False):
     """Zeigt interaktives Menue fuer Pipeline-Steuerung."""
 
     selected_model = initial_model_key or _default_model_key()
+    validated_only = initial_validated_only
 
     # Basis-Argumente (modellunabhaengig)
     base_step_args = {
@@ -325,11 +329,13 @@ def interactive_menu(paths: dict, initial_model_key: str = None):
 
     while True:
         model_name = SUPPORTED_MODELS[selected_model]
-        step_args = build_model_step_args(selected_model, base_step_args)
+        step_args = build_model_step_args(selected_model, base_step_args, validated_only=validated_only)
+
+        val_label = "  [validated-only]" if validated_only else ""
 
         print(f"\n{'=' * 79}")
         print(f"  SPOTILYZER TRAINING PIPELINE")
-        print(f"  Embedder: {selected_model}  ({model_name})")
+        print(f"  Embedder: {selected_model}  ({model_name}){val_label}")
         print(f"{'=' * 79}")
         print()
         print(f"  Pipeline-Schritte:")
@@ -338,20 +344,22 @@ def interactive_menu(paths: dict, initial_model_key: str = None):
         print(f"    3. Enrich      - Last.fm-Enrichment")
         print(f"    4. Labels      - Multi-Source-Label-Berechnung")
         print(f"    5. Embeddings  - MERT-Embedding-Extraktion  [{selected_model}]")
-        print(f"    6. Train       - XGBoost-Training  [{selected_model}]")
-        print(f"    7. Evaluate    - Modell-Evaluation  [{selected_model}]")
+        print(f"    6. Train       - XGBoost-Training  [{selected_model}]{val_label}")
+        print(f"    7. Evaluate    - Modell-Evaluation  [{selected_model}]{val_label}")
         print()
         print(f"  Kombinationen:")
-        print(f"    F. Full Pipeline   (alle Schritte)  [{selected_model}]")
-        print(f"    T. Train Only      (Embeddings + Train + Evaluate)  [{selected_model}]")
-        print(f"    E. Enrich + Train  (Enrich + Labels + T)  [{selected_model}]")
+        print(f"    F. Full Pipeline   (alle Schritte)  [{selected_model}]{val_label}")
+        print(f"    T. Train Only      (Embeddings + Train + Evaluate)  [{selected_model}]{val_label}")
+        print(f"    E. Enrich + Train  (Enrich + Labels + T)  [{selected_model}]{val_label}")
         print()
-        print(f"  Modell:")
+        print(f"  Konfiguration:")
         model_opts = "  /  ".join(
             f"[{k}]" if k == selected_model else k
             for k in SUPPORTED_MODELS
         )
         print(f"    M. Embedder wechseln  ({model_opts})")
+        val_status = "AN" if validated_only else "AUS"
+        print(f"    V. Validated-only  [{val_status}]  (aktuell: {'nur validated' if validated_only else 'alle Labels'})")
         print()
         print(f"  Sonstiges:")
         print(f"    S. Status anzeigen")
@@ -367,6 +375,10 @@ def interactive_menu(paths: dict, initial_model_key: str = None):
             keys = list(SUPPORTED_MODELS.keys())
             selected_model = keys[(keys.index(selected_model) + 1) % len(keys)]
             print(f"  Embedder gewechselt zu: {selected_model}  ({SUPPORTED_MODELS[selected_model]})")
+        elif choice == "V":
+            validated_only = not validated_only
+            status = "aktiviert" if validated_only else "deaktiviert"
+            print(f"  Validated-only {status}.")
         elif choice == "S":
             check_pipeline_status(paths, model_key=selected_model)
         elif choice == "1":
@@ -426,10 +438,16 @@ def main():
     parser.add_argument("--train", action="store_true", help="Embeddings + Train + Evaluate")
     parser.add_argument("--evaluate", action="store_true", help="Nur Evaluation")
     parser.add_argument("--status", action="store_true", help="Pipeline-Status anzeigen")
+    parser.add_argument(
+        "--validated-only",
+        action="store_true",
+        help="Train/Evaluate nur auf validated-Tracks (uebergibt --validated-only an train_model.py + evaluate.py)"
+    )
     args = parser.parse_args()
 
     # Modell-Auswahl: CLI > training.yaml > Fallback 95M
     model_key = args.model or _default_model_key()
+    validated_only = args.validated_only
 
     # Logging
     logger = setup_logging("pipeline", log_dir=paths.get("logs"))
@@ -443,7 +461,7 @@ def main():
     base_step_args = {
         "scout": ["--charts", "DE", "US", "UK", "FR", "BR", "ES", "GLOBAL"],
     }
-    step_args = build_model_step_args(model_key, base_step_args)
+    step_args = build_model_step_args(model_key, base_step_args, validated_only=validated_only)
 
     # CLI-Modus
     if args.status:
@@ -486,7 +504,7 @@ def main():
         return
 
     # Kein Flag → interaktives Menue
-    interactive_menu(paths, initial_model_key=model_key)
+    interactive_menu(paths, initial_model_key=model_key, initial_validated_only=validated_only)
 
 
 if __name__ == "__main__":
