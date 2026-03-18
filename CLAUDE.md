@@ -196,6 +196,8 @@ SpotilyzerTraining/
 │   ├── train_model.py           # XGBoost-Training mit Sample Weights
 │   ├── evaluate.py              # Metriken + Confusion Matrix (Holdout-Set aus Bundle)
 │   ├── inspect_dataset.py       # Read-only Diagnose-Tool (Label-Verteilung, Robustheit, etc.)
+│   ├── analyze_clusters.py      # Cluster-Analyse: Sanity-Check, Stats, Overlap, Chart-Discovery
+│   ├── recon_clusters.py        # Cluster-Recon: Deezer-Radio/Playlist-Erkundung vor Scouting
 │   ├── _utils.py                # Shared helpers (logging, config-loader)
 │   └── utils/
 │       ├── __init__.py
