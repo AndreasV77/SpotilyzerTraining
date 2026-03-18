@@ -549,7 +549,7 @@ def main():
         "target_metrics": target_metrics,
     }
 
-    report_path = reports_dir / "training_report.json"
+    report_path = reports_dir / f"training_report_{embedder_tag}_{date_tag}.json"
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
     print(f"  Report gespeichert: {report_path}")

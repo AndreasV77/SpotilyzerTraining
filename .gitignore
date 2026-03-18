@@ -37,6 +37,10 @@ logs/
 # Backup-Ordner
 !BU/
 
+# Legacy Scouting-Ergebnisse (verschoben von Spotilyzer)
+scout_results/
+scout_results_deezer/
+
 # OS
 .DS_Store
 Thumbs.db

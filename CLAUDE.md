@@ -3,7 +3,7 @@
 Arbeitsdokument für das Modell-Training-Subprojekt von Spotilyzer.
 
 **Erstellt:** 2026-03-07
-**Zuletzt aktualisiert:** 2026-03-08 (JSONL-Refactoring + 7 neue Genre-Cluster)
+**Zuletzt aktualisiert:** 2026-03-17 (Modell-Auswahl, Naming-Schema, aktueller Trainingsstatus)
 
 ---
 
@@ -36,14 +36,14 @@ Dieses Repository ist das **Training-Subprojekt** für Spotilyzer. Es enthält a
 ### Interface zum Hauptprojekt
 
 **Output dieses Projekts:**
-- `outputs/models/spotilyzer_model.joblib` — trainiertes XGBoost-Modell
-- `outputs/reports/training_report.json` — Trainings-Metadaten
+- `outputs/models/spotilyzer_model_{embedder}_{date}.joblib` — z.B. `spotilyzer_model_MERTv1330M_20260317.joblib`
+- `outputs/reports/training_report_{embedder}_{date}.json` — Trainings-Metadaten
 
 **Deployment:**
 ```powershell
-# Nach erfolgreichem Training:
-Copy-Item outputs/models/spotilyzer_model.joblib ..\Spotilyzer\models\
-Copy-Item outputs/reports/training_report.json ..\Spotilyzer\models\
+# Nach erfolgreichem Training (Dateinamen anpassen!):
+Copy-Item outputs/models/spotilyzer_model_MERTv195M_*.joblib ..\Spotilyzer\models\
+Copy-Item outputs/reports/training_report_MERTv195M_*.json ..\Spotilyzer\models\
 ```
 
 ### Bei GUI/CLI-bezogenen Fragen
@@ -59,9 +59,21 @@ Copy-Item outputs/reports/training_report.json ..\Spotilyzer\models\
 
 ## Projektziel
 
-Verbesserung des Hit/Mid/Flop-Klassifikators für Spotilyzer. Das Hauptproblem: **26% Flop Recall** — das Modell erkennt Hits gut (93%), übersieht aber die meisten Flops.
+Verbesserung des Hit/Mid/Flop-Klassifikators für Spotilyzer.
 
-**Ziel:** Flop Recall ≥ 50% bei Hit Recall ≥ 80%
+### Aktueller Modellstand (Stand 2026-03-17)
+
+| Modell | Datensatz | BA | Hit Recall | Flop Recall | Status |
+|--------|-----------|-----|------------|-------------|--------|
+| `MERTv1330M_20260317` | 8738 Samples, bug-fixed | 51.3% | 15.2% | 59.6% | Aktives Modell (Spotilyzer) |
+| `MERTv195M_20260317` | 8738 Samples, bug-fixed | 47.8% | 5.6% | 48.6% | Trainiert, noch nicht deployed |
+| `MERTv195M_20260302` | 5600 Samples, label-bug | 62.5% | 93.6%* | 26.8%* | Veraltet (*bug) |
+
+**Befund:** 95M schlechter als 330M auf dem gleichen Datensatz. 626 Hits (7.2%) zu wenig für beide Modelle. Kernproblem: Hit-Klassenunterrepräsentation.
+
+**Priorität:** Mehr Hit-Samples (IT, MX, CA, AU, JP Charts, Ziel ≥2000 Hits) > Modell-Tuning.
+
+**Ziel (mittelfristig):** Flop Recall ≥ 50% bei Hit Recall ≥ 80%, ≥2000 Hit-Samples
 
 ---
 
@@ -197,12 +209,18 @@ SpotilyzerTraining/
 │
 └── outputs/
     ├── models/                  # Trainierte Modelle
-    │   └── spotilyzer_model.joblib
+    │   └── spotilyzer_model_{embedder}_{date}.joblib  # z.B. MERTv1330M_20260317
     ├── reports/                 # Evaluations-Reports
-    │   └── training_report.json
-    └── embeddings/              # MERT-Embeddings
-        ├── embeddings.npy
-        └── embeddings_meta.csv
+    │   └── training_report_{embedder}_{date}.json
+    └── embeddings/              # MERT-Embeddings (je Modell ein Unterordner)
+        ├── MERT-v1-95M/         # 768-dim embeddings
+        │   ├── embeddings.npy       # Embedding-Vektoren [N×768]
+        │   ├── embeddings_meta.csv  # Track-Metadaten (ID, Pfad, etc.)
+        │   └── embeddings_info.json # Modell, Dim, Timestamp
+        └── MERT-v1-330M/        # 1024-dim embeddings
+            ├── embeddings.npy
+            ├── embeddings_meta.csv
+            └── embeddings_info.json
 ```
 
 ---
@@ -243,33 +261,69 @@ New-Item -ItemType Directory -Force -Path "G:\Dev\SpotilyzerData\playlists"
 ### Modi
 
 ```powershell
-# Interaktives Menü
+# Interaktives Menü (zeigt aktives Embedder-Modell, M zum Wechseln)
 python scripts/run_pipeline.py
 
-# Oder direkt mit Flags:
-python scripts/run_pipeline.py --full          # Vollständig: Scout → Download → Enrich → Train
-python scripts/run_pipeline.py --scout         # Nur Deezer-Scouting
-python scripts/run_pipeline.py --download      # Nur Preview-Download
-python scripts/run_pipeline.py --enrich        # Nur Last.fm-Enrichment
-python scripts/run_pipeline.py --train         # Nur Training (Labels + XGBoost)
+# Mit Modell-Auswahl:
+python scripts/run_pipeline.py --model 95M     # MERT-v1-95M (Standard aus training.yaml)
+python scripts/run_pipeline.py --model 330M    # MERT-v1-330M
+
+# Direkte Schritte mit --train:
+python scripts/run_pipeline.py --train --model 95M   # Embeddings + Train + Evaluate
+python scripts/run_pipeline.py --status --model 330M # Status-Check für 330M
+
+# Einzelne Skripte direkt:
+python scripts/extract_embeddings.py --model 95M     # → outputs/embeddings/MERT-v1-95M/
+python scripts/train_model.py --embedder 95M         # → spotilyzer_model_MERTv195M_*.joblib
+python scripts/evaluate.py --embedder 95M --save-report
 ```
+
+**WICHTIG:** Schritte 1–4 (Scout/Download/Enrich/Labels) nur bei Datensatz-Erweiterung ausführen. Für reines Neutraining eines Modells nur Schritte 5–7 (Embeddings → Train → Evaluate).
+
+### analyze_clusters.py — Multi-Purpose Analyse-Tool
+
+```powershell
+# Chart-Discovery: Welche weiteren Länder haben Deezer-Chart-Playlists?
+# → gibt YAML-Snippet aus, das direkt in clusters.yaml kopiert werden kann
+python scripts/analyze_clusters.py --discover-charts
+
+# Sanity-Check: Sind konfigurierte Playlist-IDs noch gültig?
+python scripts/analyze_clusters.py --sanity
+
+# Cluster-Statistiken aus tracks.jsonl (Label-Verteilung, Rank-Statistiken)
+python scripts/analyze_clusters.py --cluster-stats
+
+# Track-Overlap zwischen Genre-Clustern
+python scripts/analyze_clusters.py --overlap
+
+# Vollständiger Report (alle Checks)
+python scripts/analyze_clusters.py --full
+python scripts/analyze_clusters.py --full --output outputs/reports/cluster_analysis.md
+```
+
+**Typischer Einsatz:** Vor jedem Scouting-Lauf `--sanity`, nach Scouting `--cluster-stats` + `--label-distribution` für Realitätscheck.
 
 ### Abhängigkeiten zwischen Schritten
 
 ```
-scout_deezer.py
+1. scout_deezer.py
     ↓ metadata/tracks.jsonl (initial: track_id, title, artist, album, clusters, deezer_rank)
-download_previews.py
-    ↓ previews/{shard}/{track_id}.mp3 (mit ID3-Tags)
+2. download_previews.py
+    ↓ previews/{shard}/{track_id}.mp3 (mit ID3-Tags, MD5-Sharding)
     ↓ metadata/tracks.jsonl (file_path hinzugefügt)
-enrich_lastfm.py
+3. enrich_lastfm.py
     ↓ metadata/tracks.jsonl (lastfm_* Felder hinzugefügt)
-compute_labels.py
+4. compute_labels.py
     ↓ metadata/tracks.jsonl (label + robustness hinzugefügt)
-extract_embeddings.py
-    ↓ outputs/embeddings/embeddings.npy + embeddings_meta.csv
-train_model.py
-    ↓ outputs/models/spotilyzer_model.joblib + training_report.json
+5. extract_embeddings.py [--model 95M|330M]
+    ↓ outputs/embeddings/MERT-v1-{version}/embeddings.npy + embeddings_meta.csv + embeddings_info.json
+    (Checkpoint/Resume: --resume Flag, speichert alle 500 Tracks)
+6. train_model.py [--embedder 95M|330M]
+    ↓ outputs/models/spotilyzer_model_{tag}_{date}.joblib + training_report.json
+    (Label-fix: alphabetical LabelEncoder → target_names=["flop","hit","mid"])
+    (Sample weights: compute_sample_weight("balanced") × robustness weights)
+7. evaluate.py [--embedder 95M|330M] [--save-report]
+    ↓ outputs/reports/training_report_{tag}_{date}.json
 ```
 
 ---
@@ -366,8 +420,8 @@ Cluster-Definitionen mit Seed-Artists und Radio-IDs in `configs/clusters.yaml`.
 - Mid: dazwischen
 
 **Last.fm:**
-- Hit: playcount > 5M AND listeners > 500k
-- Flop: playcount < 500k OR listeners < 50k
+- Hit: playcount > 1M AND listeners > 100k
+- Flop: playcount < 100k OR listeners < 10k
 - Mid: dazwischen
 
 ### Konsens-Label
@@ -470,10 +524,10 @@ deezer:
   flop_threshold: 300000
 
 lastfm:
-  hit_playcount: 5000000
-  hit_listeners: 500000
-  flop_playcount: 500000
-  flop_listeners: 50000
+  hit_playcount: 1000000      # 1M (gesenkt von 5M)
+  hit_listeners: 100000        # 100k (gesenkt von 500k)
+  flop_playcount: 100000       # 100k (gesenkt von 500k)
+  flop_listeners: 10000        # 10k (gesenkt von 50k)
 
 sample_weights:
   validated: 1.0
@@ -490,18 +544,31 @@ composite_score:
 ### configs/training.yaml
 
 ```yaml
+# Aktives Embedder-Modell (bestimmt Embedding-Unterordner + default XGBoost-Params)
+embedder:
+  model: "m-a-p/MERT-v1-95M"   # Optionen: "m-a-p/MERT-v1-95M" | "m-a-p/MERT-v1-330M"
+  # 95M  (768-dim)  → max_depth: 6, colsample_bytree: 0.8
+  # 330M (1024-dim) → max_depth: 4, colsample_bytree: 0.6
+
 model:
   type: xgboost
   params:
-    n_estimators: 200
-    max_depth: 6
-    learning_rate: 0.1
+    n_estimators: 500        # early stopping findet Optimum
+    max_depth: 6             # 95M: 6; 330M: 4
+    learning_rate: 0.05
     subsample: 0.8
-    colsample_bytree: 0.8
+    colsample_bytree: 0.8    # 95M: 0.8; 330M: 0.6
+    min_child_weight: 3
+    gamma: 0.1
+    reg_alpha: 0.5
+    reg_lambda: 2
+
+early_stopping_rounds: 30
 
 validation:
   strategy: stratified_kfold
   n_splits: 5
+  shuffle: true
 
 target_metrics:
   flop_recall_min: 0.50
@@ -515,44 +582,83 @@ random_state: 42
 
 ## Ziel-Metriken
 
-| Metrik | Aktuell | Ziel |
-|--------|---------|------|
-| Flop Recall | 26.8% | ≥ 50% |
-| Hit Recall | 93.6% | ≥ 80% |
-| Balanced Accuracy | 62.5% | ≥ 65% |
+| Metrik | 95M_20260317 | 330M_20260317 | Ziel |
+|--------|--------------|---------------|------|
+| Flop Recall | 48.6% | 59.6% ✓ | ≥ 50% |
+| Hit Recall | 5.6% ✗ | 15.2% ✗ | ≥ 80% |
+| Balanced Accuracy | 47.8% ✗ | 51.3% ✗ | ≥ 65% |
+
+**Fazit:** Kein Modell erreicht die Ziele. Bottleneck: 626 Hit-Samples (7.2% des Datensatzes). Hauptmaßnahme: mehr Hit-Daten, nicht Hyperparameter-Tuning.
+
+*Alter 95M_20260302 mit label-bug nicht mehr relevant.*
 
 ---
 
 ## Offene Aufgaben
 
-### Kurzfristig
-- [x] `scripts/utils/` Ordner erstellen mit `paths.py`, `playlist.py`, `metadata.py`
-- [x] `scripts/_utils.py` erweitern (load_clusters_config, get_genre_clusters etc.)
-- [x] `scripts/download_previews.py` anpassen (MD5-Sharding, ID3-Tags, JSONL-Update)
-- [x] `scripts/scout_deezer.py` anpassen (JSONL statt CSV, kein pandas)
-- [x] `scripts/enrich_lastfm.py` anpassen (JSONL statt CSV, kein pandas)
-- [x] `scripts/compute_labels.py` anpassen (JSONL statt CSV, kein pandas)
-- [x] `scripts/extract_embeddings.py` anpassen (Dateipfade aus JSONL statt glob)
-- [x] `scripts/train_model.py` anpassen (Labels aus JSONL statt CSV)
-- [x] `scripts/evaluate.py` anpassen (Labels aus JSONL statt CSV)
-- [x] `scripts/run_pipeline.py` anpassen (keine CSV-Pfad-Args mehr)
-- [x] `configs/paths.yaml` aktualisieren (metadata, playlists Einträge)
-- [x] `configs/clusters.yaml` erstellen (Seed-Artists auslagern)
-- [ ] Bestehende CSV-Daten → JSONL migrieren (einmalig)
+### Kurzfristig (nächste Session)
+- [x] ~~95M Embeddings extrahieren~~ ✅ (2026-03-17, 8738 Samples)
+- [x] ~~95M Neutraining~~ ✅ (MERTv195M_20260317, BA=47.8% — schlechter als 330M)
+- [ ] `models/MODEL_COMPARISON.md` in Spotilyzer aktualisieren (neues 95M-Modell eintragen)
+- [ ] 95M-Modell nach Spotilyzer/models/ deployen (optional, wenn gewünscht)
+- [ ] `compute_labels.py` Bug 3 fixen: Dissent-Logik schickt Widersprüche zu "mid" statt "contested"
+- [ ] `configs/thresholds.yaml` — Last.fm-Schwellenwerte kalibrieren
 
 ### Mittelfristig
-- [x] **Deezer-Genre-Struktur prüfen** — alle 25 Genres analysiert, Radio-Tracklists gesampelt
-- [x] **Neue Genre-Cluster definiert** — 7 neue Cluster in `configs/clusters.yaml` eingetragen
-- [x] `scout_deezer.py` um Radio-Scouting erweitern (`radios`-Feld aus clusters.yaml)
-- [ ] Ersten vollständigen Scouting-Lauf starten (alle 23 Cluster)
-- [ ] Genre-balanced Sampling evaluieren (nach erstem Lauf)
-- [ ] Last.fm-Schwellenwerte kalibrieren (nach erstem Durchlauf)
+- [ ] Mehr Hit-Samples: Zusätzliche Charts scouten (Ziel: ≥2000 Hits)
+  - Priorität 1: IT, MX, CA, AU (große Märkte, bestätigt via --discover-charts)
+  - Priorität 2: PL, NL, SE, KR (Nischen-Stärken: Metal/EDM/K-Pop)
+  - `analyze_clusters.py --discover-charts` zuerst ausführen → prüft, ob Playlist-IDs existieren
+- [ ] Ersten vollständigen Scouting-Lauf starten (alle 23 Cluster auf neuem Datensatz)
+- [ ] Genre-balanced Sampling evaluieren
 - [ ] LightGBM als Alternative testen
+- [ ] Bestehende CSV-Daten in `scout_results/` und `scout_results_deezer/` → JSONL migrieren (einmalig, optional)
+
+### Erledigt
+- [x] JSONL-Refactoring (statt CSV/pandas)
+- [x] MD5-Sharding für Previews
+- [x] 7 neue Genre-Cluster (23 gesamt)
+- [x] Radio-Scouting in `scout_deezer.py`
+- [x] `scripts/utils/` mit `paths.py`, `playlist.py`, `metadata.py`
+- [x] Label-swap-bug fix (alphabetical LabelEncoder → target_names korrekt)
+- [x] compute_sample_weight("balanced") × robustness weights
+- [x] Embedding-Checkpoint/Resume-System (--resume, alle 500 Tracks)
+- [x] Modell-Auswahl in run_pipeline.py (interaktives Menü + --model CLI-Flag)
+- [x] `--embedder`-Flag in train_model.py und evaluate.py
+- [x] Embedder-Unterordner in outputs/embeddings/ (MERT-v1-95M/ vs MERT-v1-330M/)
+- [x] Modell-Naming-Schema: spotilyzer_model_{embedder}_{date}.joblib
+- [x] 8738-Sample-Datensatz (DE, US, UK, FR, BR, ES Charts + Genre-Cluster)
+- [x] 330M-Modell trainiert und evaluiert (MERTv1330M_20260317)
+- [x] MODEL_COMPARISON.md Cheat-Sheet erstellt
 
 ### Langfristig
 - [ ] YouTube Views als dritte Quelle
 - [ ] Genre-spezifische Modelle
 - [ ] Test auf KI-generierten Tracks (Mureka, Suno)
+
+### Backlog / Irgendwann genauer beleuchten
+- [ ] **QQ Music / NetEase Cloud Music (China)** — Detaillierte R1-Recherche März 2026:
+  
+  | Aspekt | QQ Music | NetEase |
+  |--------|----------|----------|
+  | Nutzer | ~800M | ~180M |
+  | Stärke | Mainstream-Pop, C-Pop | Indie, K-Pop, Electronic |
+  | West-Katalog | Majors ~100%, Indie dünn | Majors ~85-90% (UMG-Deal Jan 2026) |
+  | Metriken | `commentnum`, `favnum`, `listennum` | Comment Count, Popularity-Score (0-100) |
+  | Python | `qqmusic-api-python` | `pyncm` oder Node.js-Proxy (Binaryify) |
+  | Blocking | China Residential Proxy zwingend | Proxy + Cookie-Rotation |
+  
+  **Mehrwert vs. Deezer:** Comment Count / Engagement-Metriken (Frühindikator für Viralität in China)
+  
+  **Realistische Einschätzung:**
+  - Mainstream-Pop/Hip-Hop → QQ Music ideal
+  - Indie/K-Pop/Electronic → NetEase besser
+  - Metal/Gothic/Hardcore → beide dünn ("Long-Tail-Lücke")
+  - Ohne China-Infrastruktur unrealistisch
+  
+  **Alternative:** Chartmetric, Soundcharts, Viberate (kostenpflichtig, aber saubere APIs)
+  
+  **Fazit:** Interessant für Phase 2/3 bei Mainstream-Cluster-Erweiterung. Für Nischen-Genres kein Hebel.
 
 ---
 

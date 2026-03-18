@@ -88,8 +88,13 @@ def compute_label_and_robustness(
     if deezer_signal == lastfm_signal:
         return deezer_signal, "validated"
 
-    # Dissens -> konservativ zur Mitte
-    return "mid", "contested"
+    # Extremer Widerspruch (hit vs. flop) → konservativ zur Mitte
+    if {deezer_signal, lastfm_signal} == {"hit", "flop"}:
+        return "mid", "contested"
+
+    # Leichter Widerspruch (hit vs. mid oder flop vs. mid) → Deezer bevorzugen
+    # Deezer-Rank ist track-spezifisch und aktueller als Last.fm-Histogramdaten
+    return deezer_signal, "contested"
 
 
 # ══════════════════════════════════════════════════════════════════════════════

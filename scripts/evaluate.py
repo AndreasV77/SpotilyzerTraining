@@ -429,8 +429,8 @@ def main():
             "target_metrics": target_metrics,
         }
 
-        filter_tag = "_validated" if args.validated_only else ""
-        report_path = reports_dir / f"evaluation_report{filter_tag}.json"
+        model_suffix = model_path.stem.replace("spotilyzer_model_", "")
+        report_path = reports_dir / f"evaluation_report_{model_suffix}.json"
         with open(report_path, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
         print(f"\n  Report gespeichert: {report_path}")
