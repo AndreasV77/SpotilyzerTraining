@@ -170,11 +170,12 @@ def train_model(
     y: np.ndarray,
     sample_weights: np.ndarray,
     xgb_params: dict,
+    track_ids: np.ndarray = None,
     use_gpu: bool = False,
     test_size: float = 0.2,
     random_state: int = 42,
     early_stopping_rounds: int = 30,
-) -> tuple[xgb.XGBClassifier, dict]:
+) -> tuple[xgb.XGBClassifier, dict, np.ndarray]:
     """
     Trainiert XGBoost-Modell mit sample_weight.
 
@@ -182,8 +183,9 @@ def train_model(
         (model, metrics_dict)
     """
     print(f"\n  Train/Test Split ({int((1-test_size)*100)}/{int(test_size*100)})...")
-    X_train, X_test, y_train, y_test, w_train, w_test = train_test_split(
-        X, y, sample_weights,
+    ids = track_ids if track_ids is not None else np.arange(len(X))
+    X_train, X_test, y_train, y_test, w_train, w_test, ids_train, ids_test = train_test_split(
+        X, y, sample_weights, ids,
         test_size=test_size,
         random_state=random_state,
         stratify=y,
@@ -282,7 +284,7 @@ def train_model(
             f"CV={cv_scores.mean():.3f}+/-{cv_scores.std():.3f}"
         )
 
-    return model, metrics
+    return model, metrics, ids_test
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -482,9 +484,10 @@ def main():
     print(f"  TRAINING")
     print(f"{'─' * 79}")
 
-    model, metrics = train_model(
+    model, metrics, test_track_ids = train_model(
         X, y, sample_weights,
         xgb_params=xgb_params,
+        track_ids=meta_df["track_id"].values,
         use_gpu=args.gpu,
         test_size=args.test_size,
         random_state=random_state,
@@ -522,6 +525,7 @@ def main():
         "embedding_dim": X.shape[1],
         "training_config": training_cfg,
         "thresholds": thresholds_cfg,
+        "test_track_ids": test_track_ids,
     }
     joblib.dump(model_data, model_path)
     print(f"\n  Modell gespeichert: {model_path}")

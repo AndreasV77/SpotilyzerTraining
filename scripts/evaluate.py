@@ -57,6 +57,11 @@ def load_model(model_path: Path) -> dict:
     bundle = joblib.load(model_path)
     print(f"    Typ: {type(bundle['model']).__name__}")
     print(f"    Embedding-Dim: {bundle.get('embedding_dim', '?')}")
+    n_test = len(bundle.get("test_track_ids", []))
+    if n_test:
+        print(f"    Test-Track-IDs: {n_test} gespeichert")
+    else:
+        print(f"    Test-Track-IDs: nicht im Bundle (altes Modell) — Evaluation auf allen Daten")
     return bundle
 
 
@@ -65,12 +70,14 @@ def load_evaluation_data(
     jsonl_path: Path,
     sample_weights_cfg: dict,
     validated_only: bool = False,
+    test_track_ids: np.ndarray = None,
 ) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
     """
     Laedt Embeddings + Labels aus tracks.jsonl fuer Evaluation.
 
     Args:
-        validated_only: Nur Tracks mit robustness='validated' evaluieren.
+        validated_only:  Nur Tracks mit robustness='validated' evaluieren.
+        test_track_ids:  Wenn gesetzt, nur diese Track-IDs evaluieren (Holdout-Set).
 
     Returns:
         (X, sample_weights, merged_df)
@@ -79,6 +86,9 @@ def load_evaluation_data(
     meta_df = pd.read_csv(embeddings_dir / "embeddings_meta.csv")
     tracks_dict = read_tracks_as_dict(jsonl_path)
 
+    test_ids_set = set(test_track_ids.tolist()) if test_track_ids is not None else None
+    if test_ids_set is not None:
+        print(f"  Filter: nur Holdout-Testset ({len(test_ids_set)} Track-IDs aus Modell-Bundle)")
     if validated_only:
         print("  Filter: nur validated-Tracks (contested + single_source werden uebersprungen)")
 
@@ -95,6 +105,10 @@ def load_evaluation_data(
         robustness = track.get("robustness", "single_source")
 
         if label is None:
+            valid_mask.append(False)
+            continue
+
+        if test_ids_set is not None and tid not in test_ids_set:
             valid_mask.append(False)
             continue
 
@@ -390,12 +404,14 @@ def main():
     bundle = load_model(model_path)
     model = bundle["model"]
     label_encoder = bundle["label_encoder"]
+    test_track_ids = bundle.get("test_track_ids", None)
 
     # Daten laden
     print(f"\n  Lade Evaluations-Daten...")
     X, sample_weights, merged_df = load_evaluation_data(
         embeddings_dir, jsonl_path, sample_weights_cfg,
         validated_only=args.validated_only,
+        test_track_ids=test_track_ids,
     )
     print(f"    Samples: {X.shape[0]}")
     print(f"    Features: {X.shape[1]}")
