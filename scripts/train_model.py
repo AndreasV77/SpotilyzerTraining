@@ -58,9 +58,13 @@ def load_data(
     embeddings_dir: Path,
     jsonl_path: Path,
     sample_weights_cfg: dict,
+    validated_only: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, pd.DataFrame, LabelEncoder]:
     """
     Laedt Embeddings und merged sie mit Labels aus tracks.jsonl.
+
+    Args:
+        validated_only: Nur Tracks mit robustness='validated' verwenden.
 
     Returns:
         (X, y, sample_weights, metadata_df, label_encoder)
@@ -72,6 +76,11 @@ def load_data(
     print(f"    Embeddings: {embeddings.shape}")
     print(f"    Metadaten:  {len(meta_df)} Eintraege")
 
+    if validated_only:
+        print("  Filter: nur validated-Tracks (contested + single_source werden uebersprungen)")
+        if logger:
+            logger.info("Datensatz-Filter: validated_only=True")
+
     print("  Lade Labels aus tracks.jsonl...")
     tracks_dict = read_tracks_as_dict(jsonl_path)
 
@@ -79,6 +88,7 @@ def load_data(
     labels = []
     robustness_list = []
     valid_mask = []
+    skipped_robustness = 0
 
     for _, row in meta_df.iterrows():
         tid = int(row["track_id"])
@@ -86,19 +96,29 @@ def load_data(
         label = track.get("label")
         robustness = track.get("robustness", "single_source")
 
-        if label is not None:
-            labels.append(label)
-            robustness_list.append(robustness)
-            valid_mask.append(True)
-        else:
+        if label is None:
             valid_mask.append(False)
+            continue
+
+        if validated_only and robustness != "validated":
+            skipped_robustness += 1
+            valid_mask.append(False)
+            continue
+
+        labels.append(label)
+        robustness_list.append(robustness)
+        valid_mask.append(True)
 
     valid_mask = np.array(valid_mask)
-    dropped = (~valid_mask).sum()
+    dropped = (~valid_mask).sum() - skipped_robustness
     if dropped > 0:
         print(f"    {dropped} Tracks ohne Label entfernt")
         if logger:
             logger.warning(f"{dropped} Tracks ohne Label entfernt")
+    if skipped_robustness > 0:
+        print(f"    {skipped_robustness} Tracks wegen validated_only-Filter entfernt")
+        if logger:
+            logger.info(f"{skipped_robustness} Tracks durch validated_only-Filter entfernt")
 
     # Filtern
     valid_indices = meta_df.loc[valid_mask, "embedding_idx"].values
@@ -377,6 +397,11 @@ def main():
         help="Test-Set Groesse (default: 0.2)"
     )
     parser.add_argument(
+        "--validated-only",
+        action="store_true",
+        help="Nur Tracks mit robustness='validated' verwenden (entfernt contested + single_source)"
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Nur Daten laden, nicht trainieren"
@@ -399,6 +424,8 @@ def main():
     src = "CLI --embedder" if args.embedder else "training.yaml"
     if cfg_model:
         print(f"  Embedder:  {cfg_model}  ({src})")
+    if args.validated_only:
+        print(f"  Filter:    validated_only=True  (contested + single_source werden ausgeschlossen)")
 
     embeddings_dir = Path(args.embeddings_dir)
     output_dir = Path(args.output_dir)
@@ -430,6 +457,7 @@ def main():
 
     X, y, sample_weights, meta_df, label_encoder = load_data(
         embeddings_dir, jsonl_path, sample_weights_cfg,
+        validated_only=args.validated_only,
     )
 
     print(f"\n  Dataset:")
@@ -484,7 +512,8 @@ def main():
             pass
 
     date_tag = datetime.now().strftime("%Y%m%d")
-    model_filename = f"spotilyzer_model_{embedder_tag}_{date_tag}.joblib"
+    filter_tag = "_validated" if args.validated_only else ""
+    model_filename = f"spotilyzer_model_{embedder_tag}{filter_tag}_{date_tag}.joblib"
     model_path = output_dir / model_filename
 
     model_data = {
