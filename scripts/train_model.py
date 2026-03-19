@@ -56,14 +56,15 @@ logger = None
 
 def load_data(
     embeddings_dir: Path,
-    jsonl_path: Path,
+    tracks_dict: dict,
     sample_weights_cfg: dict,
     validated_only: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, pd.DataFrame, LabelEncoder]:
     """
-    Laedt Embeddings und merged sie mit Labels aus tracks.jsonl.
+    Laedt Embeddings und merged sie mit Labels aus tracks_dict.
 
     Args:
+        tracks_dict:    Bereits gemergte Track-Dicts {track_id: track}
         validated_only: Nur Tracks mit robustness='validated' verwenden.
 
     Returns:
@@ -80,9 +81,6 @@ def load_data(
         print("  Filter: nur validated-Tracks (contested + single_source werden uebersprungen)")
         if logger:
             logger.info("Datensatz-Filter: validated_only=True")
-
-    print("  Lade Labels aus tracks.jsonl...")
-    tracks_dict = read_tracks_as_dict(jsonl_path)
 
     # Label und Robustheit aus JSONL holen
     labels = []
@@ -347,6 +345,19 @@ def print_report(metrics: dict, target_metrics: dict = None):
 # MAIN
 # ══════════════════════════════════════════════════════════════════════════════
 
+def resolve_dataset_path(name: str, paths: dict) -> Path:
+    """Loest Dataset-Namen zu JSONL-Pfad auf.
+
+    'main'          → {metadata}/tracks.jsonl
+    'spotify_charts' → {data_root}/datasets/spotify_charts/tracks.jsonl
+    """
+    data_root = Path(paths.get("data_root", "G:/Dev/SpotilyzerData"))
+    if name == "main":
+        metadata_dir = paths.get("metadata", data_root / "metadata")
+        return get_tracks_jsonl_path(Path(metadata_dir))
+    return data_root / "datasets" / name / "tracks.jsonl"
+
+
 def main():
     global logger
 
@@ -354,8 +365,6 @@ def main():
     training_cfg = load_training_config()
     thresholds_cfg = load_thresholds_config()
 
-    metadata_dir = paths.get("metadata")
-    jsonl_path = get_tracks_jsonl_path(metadata_dir)
     embeddings_base = paths.get("embeddings", Path("./outputs/embeddings"))
     # Embedder-Modell aus training.yaml → Subverzeichnis ableiten
     cfg_model = training_cfg.get("embedder", {}).get("model", "")
@@ -399,6 +408,13 @@ def main():
         help="Test-Set Groesse (default: 0.2)"
     )
     parser.add_argument(
+        "--dataset",
+        nargs="+",
+        default=["main"],
+        metavar="NAME",
+        help="Dataset(s) fuer Training (default: main). Mehrere moeglich: --dataset main spotify_charts"
+    )
+    parser.add_argument(
         "--validated-only",
         action="store_true",
         help="Nur Tracks mit robustness='validated' verwenden (entfernt contested + single_source)"
@@ -439,11 +455,23 @@ def main():
         logger.error(f"Embeddings nicht gefunden: {embeddings_dir}")
         sys.exit(1)
 
-    if not jsonl_path.exists():
-        print(f"  Fehler: tracks.jsonl nicht gefunden: {jsonl_path}")
-        print(f"  -> Erst Pipeline ausfuehren (scout + enrich + labels)!")
-        logger.error(f"tracks.jsonl nicht gefunden: {jsonl_path}")
-        sys.exit(1)
+    # Dataset-Pfade aufloesen und validieren
+    dataset_paths = []
+    for name in args.dataset:
+        p = resolve_dataset_path(name, paths)
+        if not p.exists():
+            print(f"  Fehler: tracks.jsonl fuer Dataset '{name}' nicht gefunden: {p}")
+            sys.exit(1)
+        dataset_paths.append((name, p))
+
+    # Tracks aus allen Datasets laden und mergen (spaetere Datasets ueberschreiben frueheres)
+    print(f"  Lade Labels aus {len(dataset_paths)} Dataset(s)...")
+    merged_tracks: dict = {}
+    for name, p in dataset_paths:
+        d = read_tracks_as_dict(p)
+        merged_tracks.update(d)
+        print(f"    {name}: {len(d)} Tracks geladen")
+    print(f"    Gesamt (nach Dedup): {len(merged_tracks)} Tracks")
 
     # Sample-Weights aus thresholds.yaml
     sample_weights_cfg = thresholds_cfg.get("sample_weights", {
@@ -458,7 +486,7 @@ def main():
     print(f"{'─' * 79}")
 
     X, y, sample_weights, meta_df, label_encoder = load_data(
-        embeddings_dir, jsonl_path, sample_weights_cfg,
+        embeddings_dir, merged_tracks, sample_weights_cfg,
         validated_only=args.validated_only,
     )
 
@@ -525,7 +553,8 @@ def main():
     exp_label = training_cfg.get("experiment_label", "").strip()
     exp_tag = f"_{exp_label}" if exp_label else ""
     filter_tag = "_validated" if args.validated_only else ""
-    model_filename = f"spotilyzer_model_{embedder_tag}{exp_tag}{filter_tag}_{date_tag}.joblib"
+    dataset_tag = "" if args.dataset == ["main"] else "_" + "+".join(args.dataset)
+    model_filename = f"spotilyzer_model_{embedder_tag}{exp_tag}{dataset_tag}{filter_tag}_{date_tag}.joblib"
     model_path = output_dir / model_filename
 
     model_data = {
@@ -564,7 +593,7 @@ def main():
         "target_metrics": target_metrics,
     }
 
-    report_path = reports_dir / f"training_report_{embedder_tag}{exp_tag}_{date_tag}.json"
+    report_path = reports_dir / f"training_report_{embedder_tag}{exp_tag}{dataset_tag}_{date_tag}.json"
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
     print(f"  Report gespeichert: {report_path}")

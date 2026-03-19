@@ -1,0 +1,370 @@
+# clusters_recon.yaml
+# ===================
+# Chart-Cluster für Reconnaissance (recon_clusters.py)
+#
+# Diese Datei ist SEPARAT von clusters.yaml (Training).
+# Enthält alle bekannten Chart-Playlists für Metadaten-Sammlung.
+#
+# Status-Kategorien:
+#   ✅ validated   - Offiziell, aktuell, für Training geeignet
+#   ⚠️ suspicious  - Potenziell manipuliert, erfordert Prüfung
+#   ❌ excluded    - Nicht brauchbar (veraltet, user-kuratiert, falsch)
+#
+# Letzte Aktualisierung: 2026-03-18
+# Quelle: recon_20260318_145406.json — ID/KR/TH → excluded nach Recon-Analyse
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BEREITS KONFIGURIERT (in clusters.yaml für Training)
+# ══════════════════════════════════════════════════════════════════════════════
+
+existing:
+  DE:
+    name: "Germany"
+    playlist_id: 1111143121
+    status: validated
+    note: "Bereits in clusters.yaml"
+
+  US:
+    name: "USA"
+    playlist_id: 1313621735
+    status: validated
+    note: "Bereits in clusters.yaml"
+
+  UK:
+    name: "UK"
+    playlist_id: 1111142221
+    status: validated
+    note: "Bereits in clusters.yaml"
+
+  FR:
+    name: "France"
+    playlist_id: 1109890291
+    status: validated
+    note: "Bereits in clusters.yaml"
+
+  JP:
+    name: "Japan"
+    playlist_id: 1362508955
+    status: validated
+    note: "Bereits in clusters.yaml"
+
+  BR:
+    name: "Brazil"
+    playlist_id: 1111141961
+    status: validated
+    note: "Bereits in clusters.yaml"
+
+  ES:
+    name: "Spain"
+    playlist_id: 1116190041
+    status: validated
+    note: "Bereits in clusters.yaml"
+
+  GLOBAL:
+    name: "Global"
+    playlist_id: 3155776842
+    status: validated
+    note: "Bereits in clusters.yaml"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# VALIDIERT - Bereit für Integration
+# Offiziell (Deezer Charts), aktuell, keine Auffälligkeiten
+# ══════════════════════════════════════════════════════════════════════════════
+
+validated:
+  # --- EUROPA ---
+  
+  IT:
+    name: "Italy"
+    playlist_id: 1116187241
+    followers: 678285
+    status: validated
+    sample: ["Bruno Mars - I Just Might", "Alex Warren - Ordinary"]
+  
+  NL:
+    name: "Netherlands"
+    playlist_id: 1266971851
+    followers: 273234
+    status: validated
+    sample: ["Bruno Mars - I Just Might", "Olivia Dean - Man I Need"]
+  
+  BE:
+    name: "Belgium"
+    playlist_id: 1266968331
+    followers: 151978
+    status: validated
+    sample: ["Alex Warren - Ordinary", "Taylor Swift - The Fate of Ophelia"]
+  
+  PL:
+    name: "Poland"
+    playlist_id: 1266972311
+    followers: 106577
+    status: validated
+    sample: ["Dominic Fike - Babydoll", "Gigi Perez - Sailor Song"]
+  
+  SE:
+    name: "Sweden"
+    playlist_id: 1313620305
+    followers: 69301
+    status: validated
+    sample: ["Alex Warren - Ordinary", "Bruno Mars - I Just Might"]
+  
+  AT:
+    name: "Austria"
+    playlist_id: 1313615765
+    followers: 61496
+    status: validated
+    sample: ["Alex Warren - Ordinary", "Olivia Dean - Man I Need"]
+  
+  CH:
+    name: "Switzerland"
+    playlist_id: 1313617925
+    followers: 58489
+    status: validated
+    sample: ["Alex Warren - Ordinary", "Bruno Mars - I Just Might"]
+  
+  FI:
+    name: "Finland"
+    playlist_id: 1221034071
+    followers: 56498
+    status: validated
+    note: "Starke lokale Künstler (Kaija Koo, Isac Elliot)"
+    sample: ["Linda Lampenius - Liekinheitin", "Kaija Koo - Latu on auki"]
+  
+  IE:
+    name: "Ireland"
+    playlist_id: 1313619455
+    followers: 38609
+    status: validated
+    sample: ["Olivia Dean - Man I Need", "Kingfishr - Killeagh"]
+  
+  DK:
+    name: "Denmark"
+    playlist_id: 1313618905
+    followers: 32389
+    status: validated
+    sample: ["Alex Warren - Ordinary", "Olivia Dean - Man I Need"]
+  
+  NO:
+    name: "Norway"
+    playlist_id: 1313619885
+    followers: 14771
+    status: validated
+    sample: ["Bruno Mars - I Just Might", "Alex Warren - Ordinary"]
+  
+  # --- AMERIKA ---
+  
+  MX:
+    name: "Mexico"
+    playlist_id: 1111142361
+    followers: 1053497
+    status: validated
+    note: "Größter spanischsprachiger Markt, Latin-fokussiert"
+    sample: ["Peso Pluma - dopamina", "Bad Bunny - BAILE INoLVIDABLE"]
+  
+  CO:
+    name: "Colombia"
+    playlist_id: 1116188451
+    followers: 1499099
+    status: validated
+    note: "Höchste Follower-Zahl aller entdeckten Charts"
+    sample: ["Aria Vega - CHÉVERE", "Ryan Castro - LA VILLA"]
+  
+  CA:
+    name: "Canada"
+    playlist_id: 1652248171
+    followers: 42508
+    status: validated
+    sample: ["Ella Langley - Choosin' Texas", "Bruno Mars - I Just Might"]
+  
+  # --- OZEANIEN ---
+  
+  AU:
+    name: "Australia"
+    playlist_id: 1313616925
+    followers: 59311
+    status: validated
+    sample: ["Ella Langley - Choosin' Texas", "Djo - End of Beginning"]
+  
+  # --- AFRIKA ---
+  
+  ZA:
+    name: "South Africa"
+    playlist_id: 1362528775
+    followers: 61656
+    status: validated
+    sample: ["Alex Warren - Ordinary", "Jakkals Vibes - Heeltemal stom"]
+  
+  EG:
+    name: "Egypt"
+    playlist_id: 1362501615
+    followers: 110771
+    status: validated
+    note: "MENA-Region, Mix aus Arabic/International"
+    sample: ["$uplex3am - It's Dark in My Room", "Philo - 19"]
+  
+  # --- ASIEN ---
+  
+  # ID → excluded (BTS 35% Dominanz, Diversity 0.40 — K-Pop-Bot-Takeover)
+  
+  PH:
+    name: "Philippines"
+    playlist_id: 1362518895
+    followers: 57194
+    status: validated
+    sample: ["Lizzy McAlpine - ceilings", "V - Winter Ahead"]
+  
+  SA:
+    name: "Saudi Arabia"
+    playlist_id: 1362521285
+    followers: 27364
+    status: validated
+    note: "MENA-Region"
+    sample: ["KAKA - Libaas", "Heredero - Pero te quiero"]
+  
+  SG:
+    name: "Singapore"
+    playlist_id: 1313620765
+    followers: 21208
+    status: validated
+    sample: ["Jimin - Who", "Corrinne May - The Answer"]
+  
+  MY:
+    name: "Malaysia"
+    playlist_id: 1362515675
+    followers: 4733
+    status: validated
+    note: "Niedrigste Follower-Zahl der validierten Charts"
+    sample: ["Aisha Retno - Jodoh Lebaran", "Fujii Kaze - Shinunoga E-Wa"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# VERDÄCHTIG - Erfordert manuelle Prüfung
+# Potenziell manipuliert (K-Pop-Spam, Klassik-Bugs, etc.)
+# ══════════════════════════════════════════════════════════════════════════════
+
+suspicious:
+  # Leer — KR und TH nach Recon-Analyse auf excluded gesetzt (2026-03-18)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# AUSGESCHLOSSEN - Nicht brauchbar
+# Veraltet, user-kuratiert, oder Bug
+# ══════════════════════════════════════════════════════════════════════════════
+
+excluded:
+  TR:
+    name: "Turkey"
+    playlist_id: 8424777062
+    followers: 1112
+    status: excluded
+    reason: "'Top Turkey 2020' - 6 Jahre alt, nicht mehr aktuell"
+    creator: "Deezer Best Of"
+  
+  AE:
+    name: "UAE"
+    playlist_id: 7502199644
+    followers: 7
+    status: excluded
+    reason: "User-kuratiert ('musify'), 2019, nur 7 Follower"
+    creator: "musify (user)"
+  
+  NZ:
+    name: "New Zealand"
+    playlist_id: 14602024861
+    followers: 4
+    status: excluded
+    reason: "User-kuratiert ('Alexandre Costa'), 293 Tracks (keine Chart), 4 Follower"
+    creator: "Alexandre Costa (user)"
+  
+  IN:
+    name: "India"
+    playlist_id: null
+    status: excluded
+    reason: "Bug: Suche findet keine India-Chart, zeigt stattdessen Indonesia (ID 1116188761)"
+    note: "Alternative Quelle für India-Charts suchen"
+
+  AR:
+    name: "Argentina"
+    playlist_id: 1279119721
+    followers: 232355
+    status: excluded
+    reason: "K-Pop-Stan-Takeover: Nur BTS/Jimin auf Top-Positionen, kein repräsentativer Argentina-Chart"
+    sample: ["Jimin - Who", "Jimin - Set Me Free Pt.2", "BTS - Let Me Know"]
+
+  CL:
+    name: "Chile"
+    playlist_id: 1279119121
+    followers: 104241
+    status: excluded
+    reason: "Definitiv manipuliert: NUR alte BTS-Tracks (2014!) im Chart"
+    sample: ["BTS - Danger (2014)", "BTS - 24/7=Heaven (2014)"]
+
+  PT:
+    name: "Portugal"
+    playlist_id: 1362519755
+    followers: 25378
+    status: excluded
+    reason: "White-Noise-Spam ('Barulho Para Relaxar') und veraltete Tracks (Kim Wilde 1988)"
+    sample: ["Chuvarada - Barulho Para Relaxar", "Kim Wilde - You Came (1988)"]
+
+  ID:
+    name: "Indonesia"
+    playlist_id: 1116188761
+    followers: 338102
+    status: excluded
+    reason: "K-Pop-Bot-Takeover: BTS 35% Dominanz, Artist-Diversity 0.40 (Threshold 0.5)"
+    sample: ["JIN - Don't Say You Love Me", "Taylor Swift - The Fate of Ophelia"]
+
+  KR:
+    name: "South Korea"
+    playlist_id: 1362510315
+    followers: 11484
+    status: excluded
+    reason: "Klassik-Orchester auf Top-Positionen (Borodine, Saint-Saëns), <30% aktuelle Releases"
+    sample: ["Orchestre de la Societe des Concerts Symphoniques de Paris - Borodine"]
+
+  TH:
+    name: "Thailand"
+    playlist_id: 1362524475
+    followers: 8867
+    status: excluded
+    reason: "Bizarre Genre-Mischung (französische Star Academy #3), <30% aktuelle Releases"
+    sample: ["Owen James - When I Stand", "Star Academy - Indélébile"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# NOCH NICHT GESUCHT
+# Länder, die noch nicht gescoutet wurden
+# ══════════════════════════════════════════════════════════════════════════════
+
+# not_searched:
+#   CN: "China"          # Deezer nicht verfügbar
+#   RU: "Russia"         # Deezer nicht verfügbar
+#   VN: "Vietnam"
+#   TW: "Taiwan"
+#   HK: "Hong Kong"
+#   IL: "Israel"
+#   GR: "Greece"
+#   CZ: "Czech Republic"
+#   HU: "Hungary"
+#   RO: "Romania"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RECON-SPEZIFISCHE EINSTELLUNGEN
+# ══════════════════════════════════════════════════════════════════════════════
+
+recon_settings:
+  # Welche Kategorien standardmäßig analysieren?
+  default_scope:
+    - validated
+    - suspicious  # Auch verdächtige Charts analysieren, um Entscheidung zu treffen
+  
+  # Spam-Detection-Schwellenwerte
+  spam_detection:
+    single_artist_dominance_threshold: 0.3  # >30% = Warnung
+    min_artist_diversity: 0.5               # <0.5 = Warnung
+    min_recent_releases_percent: 0.3        # <30% aus letzten 12 Monaten = veraltet
+    suspicious_rank_median: 900000          # >900k = Nischen-Content

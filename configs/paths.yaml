@@ -26,6 +26,14 @@ paths:
   reports: "./outputs/reports"
   logs: "./logs"
 
+  # Spotify Charts CSV-Exports (manuell gezogen von charts.spotify.com)
+  # Struktur: spotify/{YYYY-MM-DD}/regional-{country}-weekly-{date}.csv
+  spotify_charts: "G:/Dev/SpotilyzerData/spotify"
+
+  # Modul-Datensätze (separate JSONL pro Modul)
+  # Struktur: datasets/{modul}/tracks.jsonl
+  datasets: "G:/Dev/SpotilyzerData/datasets"
+
   # Hauptprojekt-Pfad (für Model-Deployment)
   main_project: "../Spotilyzer"
   main_project_models: "../Spotilyzer/models"

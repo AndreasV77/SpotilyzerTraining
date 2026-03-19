@@ -19,6 +19,7 @@ Checkpoint-System:
   - Alle CHECKPOINT_INTERVAL Tracks wird ein Zwischenspeicher geschrieben
   - Bei Neustart wird der Checkpoint automatisch geladen (--resume, default: an)
   - --force ignoriert vorhandenen Checkpoint und startet von vorne
+  - --append lädt vorhandenes embeddings.npy + embeddings_meta.csv und verarbeitet nur neue Tracks
 
 GPU-Empfehlung: MERT-330M auf GPU: ~1-2s pro Track, auf CPU: ~20-30s pro Track
 """
@@ -241,34 +242,42 @@ def process_batch(
     checkpoint_embeddings: list = None,
     checkpoint_records: list = None,
     checkpoint_path: Path = None,
+    existing_embeddings: list = None,
+    existing_records: list = None,
 ) -> dict:
     """
     Verarbeitet Tracks anhand JSONL-Metadaten.
 
     checkpoint_embeddings / checkpoint_records: bereits verarbeitete Daten aus
-    einem frueheren Lauf — werden mit neuen Ergebnissen zusammengefuehrt.
+    einem frueheren (abgebrochenen) Lauf — werden mit neuen Ergebnissen zusammengefuehrt.
+    existing_embeddings / existing_records: fertige Embeddings aus --append-Modus.
     """
     checkpoint_embeddings = checkpoint_embeddings or []
     checkpoint_records = checkpoint_records or []
+    existing_embeddings = existing_embeddings or []
+    existing_records = existing_records or []
 
     if not tracks:
-        if checkpoint_embeddings:
-            print(f"  Keine neuen Tracks — {len(checkpoint_embeddings)} aus Checkpoint.")
+        total_existing = len(existing_embeddings) + len(checkpoint_embeddings)
+        if total_existing:
+            print(f"  Keine neuen Tracks — {total_existing} bereits verarbeitet "
+                  f"({len(existing_embeddings)} Append + {len(checkpoint_embeddings)} Checkpoint).")
         else:
             print("  Keine Tracks mit file_path gefunden!")
             if logger:
                 logger.warning("Keine Tracks mit file_path")
         return {"success": 0, "failed": 0}
 
-    already_done = len(checkpoint_embeddings)
-    print(f"  Verarbeite {len(tracks)} Dateien"
-          + (f" (+ {already_done} aus Checkpoint)" if already_done else "") + "...")
+    already_done = len(existing_embeddings) + len(checkpoint_embeddings)
+    print(f"  Verarbeite {len(tracks)} neue Dateien"
+          + (f" (+ {already_done} bereits verarbeitet)" if already_done else "") + "...")
     if logger:
-        logger.info(f"Verarbeite {len(tracks)} neue Tracks ({already_done} aus Checkpoint)")
+        logger.info(f"Verarbeite {len(tracks)} neue Tracks ({already_done} bereits verarbeitet)")
 
-    # Laufende Listen (starten mit Checkpoint-Daten)
-    embeddings_list = list(checkpoint_embeddings)
-    records = list(checkpoint_records)
+    # Laufende Listen (starten mit Append-Daten, dann Checkpoint drüber)
+    # Beide sind jetzt EmbeddingRecord-Objekte → asdict() funktioniert einheitlich
+    embeddings_list = list(existing_embeddings) + list(checkpoint_embeddings)
+    records = list(existing_records) + list(checkpoint_records)
 
     # Embedding-Indizes korrigieren (Checkpoint hatte 0-basiert aufgebaut)
     for i, rec in enumerate(records):
@@ -425,14 +434,33 @@ def main():
         help="Checkpoint ignorieren, von vorne beginnen"
     )
     parser.add_argument(
+        "--append",
+        action="store_true",
+        default=False,
+        help="Vorhandenes embeddings.npy laden, nur neue Tracks verarbeiten und zusammenführen"
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default=None,
+        help="Modul-Datensatz statt Haupt-JSONL verwenden "
+             "(z.B. 'spotify_charts' → datasets/spotify_charts/tracks.jsonl)",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Zeige was verarbeitet wuerde, ohne tatsaechlich zu laden"
     )
     args = parser.parse_args()
 
-    # Modell-Kurzname (z.B. "MERT-v1-95M") für Subdir und Anzeige
-    model_name = args.model
+    # Kurzname-Aliase auflösen (95M → m-a-p/MERT-v1-95M etc.)
+    MODEL_ALIASES = {
+        "95M":  "m-a-p/MERT-v1-95M",
+        "330M": "m-a-p/MERT-v1-330M",
+        "MERT-v1-95M":  "m-a-p/MERT-v1-95M",
+        "MERT-v1-330M": "m-a-p/MERT-v1-330M",
+    }
+    model_name = MODEL_ALIASES.get(args.model, args.model)
     model_short = model_name.split("/")[-1]  # "MERT-v1-95M"
 
     # Output-Verzeichnis: explizit oder automatisch aus Modell-Kurzname ableiten
@@ -448,6 +476,11 @@ def main():
     print(f"  MERT EMBEDDING EXTRACTOR")
     print(f"{'=' * 79}")
     print(f"  Modell:    {model_name}")
+
+    # JSONL-Pfad: Haupt-Datensatz oder Modul-Datensatz
+    if args.dataset:
+        datasets_dir = paths.get("datasets", paths["data_root"] / "datasets")
+        jsonl_path = datasets_dir / args.dataset / "tracks.jsonl"
 
     checkpoint_path = output_dir / "embeddings_checkpoint.npz"
 
@@ -470,6 +503,36 @@ def main():
     checkpoint_embeddings, checkpoint_records, done_ids = [], [], set()
     if args.resume and not args.force:
         checkpoint_embeddings, checkpoint_records, done_ids = load_checkpoint(checkpoint_path)
+
+    # --append: vorhandenes embeddings.npy + meta.csv laden, bereits verarbeitete IDs übernehmen
+    existing_embeddings, existing_records = [], []
+    if args.append and not args.force:
+        existing_meta_path = output_dir / "embeddings_meta.csv"
+        existing_npy_path = output_dir / "embeddings.npy"
+        if existing_meta_path.exists() and existing_npy_path.exists():
+            existing_arr = np.load(existing_npy_path)
+            existing_df = pd.read_csv(existing_meta_path)
+            existing_ids = set(existing_df["track_id"].tolist())
+            # Nur übernehmen wenn Arrays konsistent
+            if len(existing_arr) == len(existing_df):
+                existing_embeddings = [existing_arr[i] for i in range(len(existing_arr))]
+                # Dicts → EmbeddingRecord konvertieren für einheitliche Weiterverarbeitung
+                existing_records = [
+                    EmbeddingRecord(
+                        track_id=int(row["track_id"]),
+                        clusters=str(row.get("clusters", "")),
+                        filename=str(row.get("filename", "")),
+                        embedding_idx=int(row.get("embedding_idx", i)),
+                    )
+                    for i, row in existing_df.iterrows()
+                ]
+                done_ids = done_ids | existing_ids
+                print(f"  Append-Modus: {len(existing_ids)} bereits eingebettete Tracks geladen")
+            else:
+                print(f"  Warnung: embeddings.npy ({len(existing_arr)}) und meta.csv "
+                      f"({len(existing_df)}) inkonsistent — Append deaktiviert")
+        else:
+            print(f"  Append-Modus: keine vorhandenen Embeddings gefunden, starte neu")
 
     # Bereits verarbeitete Tracks herausfiltern
     if done_ids:
@@ -525,6 +588,8 @@ def main():
         checkpoint_embeddings=checkpoint_embeddings,
         checkpoint_records=checkpoint_records,
         checkpoint_path=checkpoint_path,
+        existing_embeddings=existing_embeddings,
+        existing_records=existing_records,
     )
 
     # Ergebnis

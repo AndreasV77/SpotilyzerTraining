@@ -492,6 +492,7 @@ indie_folk:
 # Der Cluster-Name wird als "charts_{country_code}" generiert.
 
 charts:
+  # --- BESTEHEND (8) ---
   DE:
     name: "Germany"
     playlist_id: 1111143121
@@ -507,6 +508,7 @@ charts:
   JP:
     name: "Japan"
     playlist_id: 1362508955
+    note: "Niedriger Rank-Median (221k) → primär Flop-Samples, kein Hit-Lieferant"
   BR:
     name: "Brazil"
     playlist_id: 1111141961
@@ -516,6 +518,102 @@ charts:
   GLOBAL:
     name: "Global"
     playlist_id: 3155776842
+
+  # --- EUROPA NEU (11) — validiert 2026-03-18 ---
+  IT:
+    name: "Italy"
+    playlist_id: 1116187241
+    followers: 678285
+  NL:
+    name: "Netherlands"
+    playlist_id: 1266971851
+    followers: 273234
+  BE:
+    name: "Belgium"
+    playlist_id: 1266968331
+    followers: 151978
+  PL:
+    name: "Poland"
+    playlist_id: 1266972311
+    followers: 106577
+  SE:
+    name: "Sweden"
+    playlist_id: 1313620305
+    followers: 69301
+  AT:
+    name: "Austria"
+    playlist_id: 1313615765
+    followers: 61496
+  CH:
+    name: "Switzerland"
+    playlist_id: 1313617925
+    followers: 58489
+  FI:
+    name: "Finland"
+    playlist_id: 1221034071
+    followers: 56498
+    note: "Starke lokale Künstler — niedriger Überlapp mit anderen Charts"
+  AU:
+    name: "Australia"
+    playlist_id: 1313616925
+    followers: 59311
+  IE:
+    name: "Ireland"
+    playlist_id: 1313619455
+    followers: 38609
+  DK:
+    name: "Denmark"
+    playlist_id: 1313618905
+    followers: 32389
+  NO:
+    name: "Norway"
+    playlist_id: 1313619885
+    followers: 14771
+
+  # --- AMERIKA NEU (3) — validiert 2026-03-18 ---
+  CA:
+    name: "Canada"
+    playlist_id: 1652248171
+    followers: 42508
+  MX:
+    name: "Mexico"
+    playlist_id: 1111142361
+    followers: 1053497
+    note: "Diversity 0.43 (unter Threshold) — Latin-fokussiert, trotzdem eingeschlossen"
+  CO:
+    name: "Colombia"
+    playlist_id: 1116188451
+    followers: 1499099
+    note: "Diversity 0.45 (unter Threshold) — Latin-fokussiert, trotzdem eingeschlossen"
+
+  # --- OZEANIEN/AFRIKA/ASIEN NEU (6) — validiert 2026-03-18 ---
+  ZA:
+    name: "South Africa"
+    playlist_id: 1362528775
+    followers: 61656
+  EG:
+    name: "Egypt"
+    playlist_id: 1362501615
+    followers: 110771
+    note: "MENA-Region, Mix aus Arabic/International"
+  PH:
+    name: "Philippines"
+    playlist_id: 1362518895
+    followers: 57194
+  SA:
+    name: "Saudi Arabia"
+    playlist_id: 1362521285
+    followers: 27364
+    note: "MENA-Region"
+  SG:
+    name: "Singapore"
+    playlist_id: 1313620765
+    followers: 21208
+  MY:
+    name: "Malaysia"
+    playlist_id: 1362515675
+    followers: 4733
+    note: "Kleinster Markt, starke lokale Acts"
 
 # ══════════════════════════════════════════════════════════════════════════════
 # API-KONFIGURATION

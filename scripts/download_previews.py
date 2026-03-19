@@ -267,11 +267,16 @@ def main():
     paths = load_paths_config()
 
     previews_dir = paths.get("previews")
-    metadata_dir = paths.get("metadata")
-    jsonl_path = get_tracks_jsonl_path(metadata_dir)
 
     parser = argparse.ArgumentParser(
         description="Download Deezer Preview-MP3s (MD5-Sharding, ID3-Tags)"
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default=None,
+        help="Modul-Datensatz statt Haupt-JSONL verwenden "
+             "(z.B. 'spotify_charts' → datasets/spotify_charts/tracks.jsonl)",
     )
     parser.add_argument(
         "--workers",
@@ -292,6 +297,14 @@ def main():
         help="Nur bestimmten Cluster downloaden"
     )
     parser.add_argument(
+        "--min-rank",
+        type=int,
+        default=0,
+        help="Nur Tracks mit deezer_rank >= MIN_RANK downloaden (0 = alle). "
+             "Beispiel: --min-rank 300000 ueberspringt Flops, "
+             "--min-rank 700000 nur Hit-Kandidaten"
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Zeige was heruntergeladen wuerde, ohne tatsaechlich zu laden"
@@ -301,10 +314,20 @@ def main():
     # Logging
     logger = setup_logging("download", log_dir=paths.get("logs"))
 
+    # JSONL-Pfad: Haupt-Datensatz oder Modul-Datensatz
+    if args.dataset:
+        datasets_dir = paths.get("datasets", paths["data_root"] / "datasets")
+        jsonl_path = datasets_dir / args.dataset / "tracks.jsonl"
+    else:
+        jsonl_path = get_tracks_jsonl_path(paths.get("metadata"))
+
     # Tracks aus JSONL laden
     if not jsonl_path.exists():
         print(f"Fehler: tracks.jsonl nicht gefunden: {jsonl_path}")
-        print(f"  -> Erst 'python scripts/scout_deezer.py' ausfuehren!")
+        if args.dataset:
+            print(f"  -> Erst 'python scripts/scout_spotify.py' ausfuehren!")
+        else:
+            print(f"  -> Erst 'python scripts/scout_deezer.py' ausfuehren!")
         logger.error(f"tracks.jsonl nicht gefunden: {jsonl_path}")
         sys.exit(1)
 
@@ -321,6 +344,14 @@ def main():
     if args.cluster:
         all_tracks = filter_tracks(all_tracks, cluster=args.cluster)
         print(f"  Filter:  cluster={args.cluster} -> {len(all_tracks)} Tracks")
+
+    # Filter nach Mindest-Rank (Flop-Ausschluss)
+    if args.min_rank > 0:
+        before = len(all_tracks)
+        all_tracks = [t for t in all_tracks if t.get("deezer_rank", 0) >= args.min_rank]
+        skipped = before - len(all_tracks)
+        print(f"  Filter:  deezer_rank >= {args.min_rank:,} -> {len(all_tracks)} Tracks "
+              f"({skipped} uebersprungen)")
 
     # Limit
     if args.limit > 0:

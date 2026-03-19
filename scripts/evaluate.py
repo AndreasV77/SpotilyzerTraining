@@ -41,7 +41,7 @@ from _utils import (
     load_thresholds_config,
     ensure_dir,
 )
-from utils.metadata import read_tracks_as_dict, get_tracks_jsonl_path
+from utils.metadata import read_tracks_as_dict, get_tracks_jsonl_path, read_tracks
 
 # Logger (wird in main() initialisiert)
 logger = None
@@ -65,17 +65,39 @@ def load_model(model_path: Path) -> dict:
     return bundle
 
 
+def load_tracks_from_datasets(jsonl_paths: list[Path]) -> dict[int, dict]:
+    """Laedt und merged Tracks aus mehreren JSONL-Quellen."""
+    merged = {}
+    for p in jsonl_paths:
+        if not p.exists():
+            print(f"  WARNUNG: JSONL nicht gefunden, uebersprungen: {p}")
+            continue
+        for track in read_tracks(p):
+            tid = track.get("track_id")
+            if tid is not None:
+                if tid in merged:
+                    # Clusters mergen, Rest aktualisieren
+                    old_clusters = set(merged[tid].get("clusters", []))
+                    new_clusters = set(track.get("clusters", []))
+                    merged[tid].update(track)
+                    merged[tid]["clusters"] = sorted(old_clusters | new_clusters)
+                else:
+                    merged[tid] = track
+    return merged
+
+
 def load_evaluation_data(
     embeddings_dir: Path,
-    jsonl_path: Path,
+    jsonl_paths: list[Path],
     sample_weights_cfg: dict,
     validated_only: bool = False,
     test_track_ids: np.ndarray = None,
 ) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
     """
-    Laedt Embeddings + Labels aus tracks.jsonl fuer Evaluation.
+    Laedt Embeddings + Labels aus einer oder mehreren tracks.jsonl fuer Evaluation.
 
     Args:
+        jsonl_paths:     Liste von JSONL-Pfaden (main + Dataset-Module).
         validated_only:  Nur Tracks mit robustness='validated' evaluieren.
         test_track_ids:  Wenn gesetzt, nur diese Track-IDs evaluieren (Holdout-Set).
 
@@ -84,7 +106,7 @@ def load_evaluation_data(
     """
     embeddings = np.load(embeddings_dir / "embeddings.npy")
     meta_df = pd.read_csv(embeddings_dir / "embeddings_meta.csv")
-    tracks_dict = read_tracks_as_dict(jsonl_path)
+    tracks_dict = load_tracks_from_datasets(jsonl_paths)
 
     test_ids_set = set(test_track_ids.tolist()) if test_track_ids is not None else None
     if test_ids_set is not None:
@@ -294,8 +316,6 @@ def main():
     training_cfg = load_training_config()
     thresholds_cfg = load_thresholds_config()
 
-    metadata_dir = paths.get("metadata")
-    jsonl_path = get_tracks_jsonl_path(metadata_dir)
     models_dir = paths.get("models", Path("./outputs/models"))
     embeddings_base = paths.get("embeddings", Path("./outputs/embeddings"))
 
@@ -332,6 +352,13 @@ def main():
         help=f"Verzeichnis mit Embeddings (default: aus training.yaml = {default_embeddings})"
     )
     parser.add_argument(
+        "--dataset",
+        nargs="+",
+        default=["main"],
+        metavar="DATASET",
+        help="Datensatz-Quellen: 'main' und/oder Modul-Namen z.B. 'spotify_charts' (default: main)"
+    )
+    parser.add_argument(
         "--save-report",
         action="store_true",
         help="Speichere Report als JSON"
@@ -351,16 +378,27 @@ def main():
         # Modell-Autodetect nur wenn kein explizites --model übergeben wurde
         if args.model == default_model:
             if args.validated_only:
-                tagged = sorted(models_dir.glob(f"spotilyzer_model_{tag}_validated_*.joblib"),
+                # *validated* matcht auch "main+spotify_charts_validated" etc.
+                tagged = sorted(models_dir.glob(f"spotilyzer_model_{tag}*validated*.joblib"),
                                 key=lambda p: p.stat().st_mtime, reverse=True)
             else:
-                all_tagged = sorted(models_dir.glob(f"spotilyzer_model_{tag}_*.joblib"),
+                all_tagged = sorted(models_dir.glob(f"spotilyzer_model_{tag}*.joblib"),
                                     key=lambda p: p.stat().st_mtime, reverse=True)
-                tagged = [p for p in all_tagged if "_validated_" not in p.name]
+                tagged = [p for p in all_tagged if "validated" not in p.name]
                 if not tagged:
                     tagged = all_tagged
             if tagged:
                 args.model = str(tagged[0])
+
+    # JSONL-Pfade aus --dataset aufbauen
+    datasets_base = paths.get("datasets", Path("G:/Dev/SpotilyzerData/datasets"))
+    metadata_dir = paths.get("metadata")
+    jsonl_paths = []
+    for ds in args.dataset:
+        if ds == "main":
+            jsonl_paths.append(get_tracks_jsonl_path(metadata_dir))
+        else:
+            jsonl_paths.append(Path(datasets_base) / ds / "tracks.jsonl")
 
     # Logging
     logger = setup_logging("evaluation", log_dir=paths.get("logs"))
@@ -387,11 +425,6 @@ def main():
         logger.error(f"Embeddings nicht gefunden: {embeddings_dir}")
         sys.exit(1)
 
-    if not jsonl_path.exists():
-        print(f"  Fehler: tracks.jsonl nicht gefunden: {jsonl_path}")
-        logger.error(f"tracks.jsonl nicht gefunden: {jsonl_path}")
-        sys.exit(1)
-
     # Sample-Weights aus thresholds.yaml
     sample_weights_cfg = thresholds_cfg.get("sample_weights", {
         "validated": 1.0,
@@ -407,8 +440,9 @@ def main():
 
     # Daten laden
     print(f"\n  Lade Evaluations-Daten...")
+    print(f"  Datasets: {args.dataset}")
     X, sample_weights, merged_df = load_evaluation_data(
-        embeddings_dir, jsonl_path, sample_weights_cfg,
+        embeddings_dir, jsonl_paths, sample_weights_cfg,
         validated_only=args.validated_only,
         test_track_ids=test_track_ids,
     )
