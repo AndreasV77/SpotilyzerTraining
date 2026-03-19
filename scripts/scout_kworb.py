@@ -47,7 +47,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _utils import setup_logging, load_paths_config, ensure_dir
-from utils.metadata import merge_tracks
+from utils.metadata import merge_tracks, read_tracks
 
 # ══════════════════════════════════════════════════════════════════════════════
 # KONFIGURATION
@@ -120,6 +120,7 @@ def scrape_market(market: str, min_streams: int, quality_only: bool) -> list[dic
 
     try:
         resp = requests.get(url, headers={"User-Agent": MB_USER_AGENT}, timeout=30)
+        resp.encoding = "utf-8"  # Kworb liefert UTF-8, requests erkennt es nicht immer
         time.sleep(0.5)  # Kworb höflich behandeln
         if resp.status_code != 200:
             logger.warning(f"  HTTP {resp.status_code} für {market}")
@@ -207,10 +208,16 @@ def scrape_market(market: str, min_streams: int, quality_only: bool) -> list[dic
     return tracks
 
 
-def aggregate_markets(all_market_tracks: dict[str, list[dict]]) -> dict[str, dict]:
+def aggregate_markets(
+    all_market_tracks: dict[str, list[dict]],
+    max_tracks: Optional[int] = None,
+) -> dict[str, dict]:
     """
     Aggregiert Tracks über alle Märkte.
     Dedup-Key: (artist_lower, title_lower).
+
+    Wenn max_tracks gesetzt: nach Dedup nach total_streams (max über alle Märkte)
+    absteigend sortieren und auf max_tracks kappen.
 
     Returns:
         {key: {"artist": ..., "title": ..., "chart_entries": [...]}}
@@ -226,6 +233,7 @@ def aggregate_markets(all_market_tracks: dict[str, list[dict]]) -> dict[str, dic
                     "artist":        t["artist"],
                     "title":         t["title"],
                     "chart_entries": [],
+                    "_max_streams":  0,
                 }
 
             aggregated[key]["chart_entries"].append({
@@ -236,6 +244,21 @@ def aggregate_markets(all_market_tracks: dict[str, list[dict]]) -> dict[str, dic
                 "total_streams":  t["total_streams"],
                 "pk_streams":     t["pk_streams"],
             })
+            # Höchsten Total-Streams-Wert über alle Märkte merken (für Sortierung)
+            if t["total_streams"] and t["total_streams"] > aggregated[key]["_max_streams"]:
+                aggregated[key]["_max_streams"] = t["total_streams"]
+
+    if max_tracks and len(aggregated) > max_tracks:
+        sorted_keys = sorted(
+            aggregated.keys(),
+            key=lambda k: aggregated[k]["_max_streams"],
+            reverse=True,
+        )
+        aggregated = {k: aggregated[k] for k in sorted_keys[:max_tracks]}
+
+    # Internes Sortierfeld entfernen
+    for v in aggregated.values():
+        v.pop("_max_streams", None)
 
     return aggregated
 
@@ -432,12 +455,20 @@ def main():
         help="Nur Pk <= 50 AND Wks >= 4 (ignoriert --min-streams)",
     )
     parser.add_argument(
+        "--max-tracks", type=int, default=None,
+        help="Nach Dedup auf Top N nach total_streams kappen (default: alle)",
+    )
+    parser.add_argument(
         "--skip-mb", action="store_true",
         help="MusicBrainz überspringen, direkt Deezer-Suche (schneller, kein ISRC)",
     )
     parser.add_argument(
         "--output", type=Path,
         help="Output JSONL (default: datasets/kworb/tracks.jsonl)",
+    )
+    parser.add_argument(
+        "--checkpoint-every", type=int, default=100, metavar="N",
+        help="Checkpoint alle N Tracks sichern (default: 100)",
     )
     parser.add_argument(
         "--dry-run", action="store_true",
@@ -472,7 +503,7 @@ def main():
     for market in args.markets:
         all_market_tracks[market] = scrape_market(market, args.min_streams, args.quality_only)
 
-    aggregated = aggregate_markets(all_market_tracks)
+    aggregated = aggregate_markets(all_market_tracks, max_tracks=args.max_tracks)
     total = len(aggregated)
     market_counts = {m: len(t) for m, t in all_market_tracks.items()}
 
@@ -492,29 +523,83 @@ def main():
         print(f"  Tracks je Markt (vor Dedup):")
         for m, c in market_counts.items():
             print(f"    {m:6s}: {c:5d}")
-        print(f"  Unique (dedup): {total}")
+        print(f"  Unique (dedup): {total}" + (f"  [Top {args.max_tracks} by streams]" if args.max_tracks else ""))
         print(f"  Labels:         {hits} Hits, {mids} Mids")
         print(f"  Output:         {output_path}")
         print(f"{'='*60}")
         return
+
+    # ── Checkpoint + Resume-Setup ────────────────────────────────────────────
+    checkpoint_path   = output_path.parent / "kworb_checkpoint.jsonl"
+    miss_cache_path   = output_path.parent / "deezer_miss_cache.json"
+    checkpoint_every  = args.checkpoint_every
+
+    # Bestehende JSONL-Keys einlesen (bereits final gemergte Tracks überspringen)
+    existing_keys: set[str] = set()
+    for t in read_tracks(output_path):
+        a = t.get("artist", "")
+        ti = t.get("title", "")
+        if a or ti:
+            existing_keys.add(f"{a.lower()}|||{ti.lower()}")
+    logger.info(f"Bestehende JSONL: {len(existing_keys)} Tracks")
+
+    # Checkpoint-Datei laden (Tracks aus laufendem/abgebrochenem Run)
+    accumulated_tracks: list[dict] = []
+    checkpoint_keys: set[str] = set()
+    if checkpoint_path.exists():
+        with open(checkpoint_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    t = json.loads(line)
+                    accumulated_tracks.append(t)
+                    a  = t.get("artist", "")
+                    ti = t.get("title", "")
+                    checkpoint_keys.add(f"{a.lower()}|||{ti.lower()}")
+        logger.info(f"Checkpoint geladen: {len(accumulated_tracks)} Tracks → Fortsetzen")
+
+    # Miss-Cache laden (Tracks ohne Deezer-Match nicht erneut versuchen)
+    miss_keys: set[str] = set()
+    if miss_cache_path.exists():
+        with open(miss_cache_path, "r", encoding="utf-8") as f:
+            miss_keys = set(json.load(f))
+        logger.info(f"Miss-Cache: {len(miss_keys)} Einträge")
+
+    skip_keys = existing_keys | checkpoint_keys | miss_keys
 
     # ── Phase 2+3: MusicBrainz + Deezer ─────────────────────────────────────
     stats = {
         "hit": 0, "mid": 0,
         "mb_found": 0, "mb_miss": 0, "mb_cached": 0,
         "deezer_isrc": 0, "deezer_search": 0, "deezer_miss": 0,
+        "skipped": 0,
     }
-    new_tracks = []
+
     track_list = list(aggregated.values())
 
-    for i, track in enumerate(track_list, 1):
+    # Bereits verarbeitete Tracks überspringen
+    todo_list = [
+        t for t in track_list
+        if f"{t['artist'].lower()}|||{t['title'].lower()}" not in skip_keys
+    ]
+    stats["skipped"] = len(track_list) - len(todo_list)
+    if stats["skipped"]:
+        logger.info(
+            f"Resume: {stats['skipped']} Tracks übersprungen "
+            f"({len(todo_list)} verbleibend)"
+        )
+
+    new_misses: list[str] = []
+
+    for i, track in enumerate(todo_list, 1):
         artist        = track["artist"]
         title         = track["title"]
         chart_entries = track["chart_entries"]
+        track_key     = f"{artist.lower()}|||{title.lower()}"
 
-        if i % 50 == 0 or i == total:
+        if i % 50 == 0 or i == len(todo_list):
             logger.info(
-                f"  [{i}/{total}] {artist[:30]} — {title[:30]}"
+                f"  [{i}/{len(todo_list)}] {artist[:30]} — {title[:30]}"
                 f"  (MB-Cache: {len(isrc_cache)})"
             )
 
@@ -523,7 +608,7 @@ def main():
         # MusicBrainz ISRC
         isrc = None
         if not args.skip_mb:
-            was_cached = f"{artist.lower()}|||{title.lower()}" in isrc_cache
+            was_cached = track_key in isrc_cache
             isrc = get_isrc_by_artist_title(artist, title, isrc_cache)
             if was_cached:
                 stats["mb_cached"] += 1
@@ -545,21 +630,53 @@ def main():
                 stats["deezer_search"] += 1
             else:
                 stats["deezer_miss"] += 1
+                new_misses.append(track_key)
                 logger.warning(f"Kein Deezer-Match: {artist} — {title}")
-                continue
 
-        new_tracks.append(build_track_dict(
-            deezer_data, isrc, chart_entries, chart_score, label,
-        ))
-        stats[label] += 1
+        if deezer_data:
+            track_dict = build_track_dict(
+                deezer_data, isrc, chart_entries, chart_score, label,
+            )
+            accumulated_tracks.append(track_dict)
+            stats[label] += 1
 
-    # Cache sichern
+        # ── Checkpoint ───────────────────────────────────────────────────────
+        if i % checkpoint_every == 0:
+            # Checkpoint-Datei (alle bisher gefundenen Tracks)
+            with open(checkpoint_path, "w", encoding="utf-8") as f:
+                for t in accumulated_tracks:
+                    f.write(json.dumps(t, ensure_ascii=False) + "\n")
+            # Miss-Cache
+            miss_keys.update(new_misses)
+            new_misses = []
+            with open(miss_cache_path, "w", encoding="utf-8") as f:
+                json.dump(sorted(miss_keys), f, ensure_ascii=False)
+            # ISRC-Cache
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump(isrc_cache, f, ensure_ascii=False, indent=2)
+            logger.info(
+                f"  ✓ Checkpoint @ {i}/{len(todo_list)}: "
+                f"{len(accumulated_tracks)} Tracks gespeichert"
+            )
+
+    # ISRC-Cache final sichern
     with open(cache_path, "w", encoding="utf-8") as f:
         json.dump(isrc_cache, f, ensure_ascii=False, indent=2)
     logger.info(f"ISRC-Cache gespeichert: {len(isrc_cache)} Einträge → {cache_path}")
 
+    # Miss-Cache final sichern
+    miss_keys.update(new_misses)
+    with open(miss_cache_path, "w", encoding="utf-8") as f:
+        json.dump(sorted(miss_keys), f, ensure_ascii=False)
+    logger.info(f"Miss-Cache gespeichert: {len(miss_keys)} Einträge → {miss_cache_path}")
+
     # ── Phase 4: Merge + schreiben ───────────────────────────────────────────
-    updated, added = merge_tracks(output_path, new_tracks)
+    updated, added = merge_tracks(output_path, accumulated_tracks)
+
+    # Checkpoint-Datei aufräumen (Lauf erfolgreich abgeschlossen)
+    if checkpoint_path.exists():
+        checkpoint_path.unlink()
+        logger.info("Checkpoint-Datei gelöscht (Lauf abgeschlossen)")
 
     # ── Zusammenfassung ──────────────────────────────────────────────────────
     print(f"\n{'='*60}")
@@ -570,6 +687,8 @@ def main():
     for m, c in market_counts.items():
         print(f"    {m:6s}: {c:5d}")
     print(f"  Unique (dedup):    {total}")
+    if stats["skipped"]:
+        print(f"  Übersprungen:      {stats['skipped']} (bereits verarbeitet)")
     if not args.skip_mb:
         print(f"  MusicBrainz:       {stats['mb_found']} neu / "
               f"{stats['mb_cached']} cached / {stats['mb_miss']} miss")
