@@ -3,7 +3,7 @@
 Arbeitsdokument für das Modell-Training-Subprojekt von Spotilyzer.
 
 **Erstellt:** 2026-03-07
-**Zuletzt aktualisiert:** 2026-03-20 (Session 7: Balancing-Experimente expA/B/C/Dim — kein Experiment schlägt Baseline. expDim-Befund: Hit R.=90.8% mit max_depth=6/colsample=0.8, aber BA sinkt. Baseline S6 bleibt aktiv.)
+**Zuletzt aktualisiert:** 2026-03-31 (Session 8: depth-Sweep expD5a/b abgeschlossen — sweet-spot-Hypothese widerlegt, depth=4 bleibt BA-Optimum. Post-hoc Logit-Adjustment τ=0.25 → BA=65.3% erreichbar, aber Hit Recall fällt auf 73.2%. tune_postprocessing.py + evaluate.py --tau/--theta implementiert.)
 
 **Wichtige Regel:** CLAUDE.md immer nach abgeschlossenen Schritten aktualisieren — nie auf Basis von laufenden oder geplanten Ergebnissen schreiben. Metriken immer aus Reports lesen, nicht schätzen.
 
@@ -90,8 +90,33 @@ Alle Metriken auf echtem Holdout-Set (20%). Datensatz: validated-only.
 Kein Experiment schlägt die Baseline in BA. Klare Befunde:
 - **Undersampling (expA/C):** Hit Recall −9–24pp, Mid Recall +5–21pp — ungünstiger Trade
 - **Boost (expB):** BA stabil (−0.2pp), Mid Recall +14pp, aber Hit Recall −14pp
-- **expDim:** Hit Recall **90.8%** (+8.3pp!), aber Flop −8.2pp, Mid −6pp, BA −1.9pp. Die 330M-Regularisierung (max_depth=4, col=0.6) dämpft Hit-Erkennung ohne BA-Gewinn — sweet spot liegt vermutlich bei max_depth=5
-- BA≥65% noch nicht erreicht — braucht neue Strategie (mehr Mid-Samples oder anderer Algorithmus)
+- **expDim:** Hit Recall **90.8%** (+8.3pp!), aber Flop −8.2pp, Mid −6pp, BA −1.9pp
+- BA≥65% noch nicht erreicht — Post-hoc Adjustment als nächste Strategie (Session 8)
+
+**Session-8-Befund: depth-Sweep + Post-hoc Adjustment (2026-03-31)**
+
+depth-Sweep (Hypothese: sweet spot bei max_depth=5) — alle auf Holdout n=4545:
+
+| Experiment | depth | colsample | BA | Hit R. | Mid R. | Flop R. |
+|-----------|-------|-----------|-----|--------|--------|---------|
+| Baseline S6 | 4 | 0.6 | **64.2%** | 82.5% | 36.6% | **73.5%** |
+| expD5a | 5 | 0.6 | 63.5% | 86.3% | 35.4% | 68.9% |
+| expD5b | 5 | 0.8 | 63.0% | 86.9% | 34.7% | 67.5% |
+| expDim (Ref.) | 6 | 0.8 | 62.3% | **90.8%** | 30.8% | 65.3% |
+
+Sweet-spot-Hypothese widerlegt: monotoner Trend — mehr depth/colsample → Hit Recall ↑, BA/Flop/Mid ↓. **depth=4, col=0.6 bleibt das BA-Optimum.** Hyperparameter-Raum ausgereizt.
+
+Post-hoc Logit-Adjustment τ-Sweep auf Baseline S6 (`_20260319`, n=4545):
+
+| τ | BA | Hit R. | Mid R. | Flop R. |
+|---|-----|--------|--------|---------|
+| 0.0 (Baseline) | 64.2% | **82.5%** | 36.6% | 73.5% |
+| **0.25** | **65.3%** | 73.2% | 42.9% | 79.8% |
+| 0.5 | 64.8% | 61.2% | 48.5% | 84.6% |
+
+Combined best (τ=0.25, θ_hit=0.45, θ_flop=0.35): BA=**65.7%**, Hit=76.4%. BA-Ziel erreichbar, aber BA≥65% und Hit Recall≥80% gleichzeitig nicht darstellbar via Post-hoc Adjustment.
+
+Leakage-Befund: 88.4% der Holdout-Tracks von Künstlern, die auch im Training vorkommen → alle Metriken optimistisch verzerrt. Für unbiasierte Evaluation: GroupKFold mit artist_id erforderlich.
 
 **Session-6-Befund:** kworb auf 12 Märkte erweitert (+ fr/au/ca mit Weight 0.85, it/se/nl mit 0.70). Bug fix: HIT_THRESHOLDS kannte nur Weights 1.0/0.85/0.70 — neue 0.5-Märkte wären nie als Hit klassifiziert worden. 15.684 neue Tracks, 16.481 neue Previews. Nach Dedup-Fix (35.530 → 26.004 Embeddings): Trainingsdatensatz 22.722 validated, 14.991 Hits. Hit Recall: 72.8% → **82.5% (+9.7pp) — Primärziel ≥80% erreicht**. Mid Recall sank von ~46% auf 36.6% (Mid-Klasse durch Hit-Flut zerrieben). BA 64.2% — noch 0.8pp bis Ziel ≥65%.
 

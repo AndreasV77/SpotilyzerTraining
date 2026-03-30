@@ -19,10 +19,8 @@ ENV/
 data/*.csv
 data/*.npy
 
-# Outputs
-outputs/models/*.joblib
-outputs/reports/*.json
-outputs/embeddings/
+# Outputs (Modelle, Embeddings, Reports, Recon — zu groß oder generiert)
+outputs/
 
 # Logs (Laufzeit-Logs, nicht in Git)
 logs/
@@ -34,8 +32,8 @@ logs/
 .ipynb_checkpoints/
 *.ipynb_checkpoints
 
-# Backup-Ordner
-!BU/
+# Backup-Ordner (Verzeichnis heißt wörtlich "!BU/" — ! muss escaped werden)
+\!BU/
 
 # Legacy Scouting-Ergebnisse (verschoben von Spotilyzer)
 scout_results/
