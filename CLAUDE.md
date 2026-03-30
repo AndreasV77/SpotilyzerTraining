@@ -3,7 +3,7 @@
 Arbeitsdokument für das Modell-Training-Subprojekt von Spotilyzer.
 
 **Erstellt:** 2026-03-07
-**Zuletzt aktualisiert:** 2026-03-19 (Session 5: kworb-Modul implementiert, scout_kworb.py + Checkpoint-System, Datensatz auf ~8960 validated / ~3700 Hits erweitert, neues Modell BA=63.0% / Hit R.=72.8%)
+**Zuletzt aktualisiert:** 2026-03-20 (Session 7: Balancing-Experimente expA/B/C/Dim — kein Experiment schlägt Baseline. expDim-Befund: Hit R.=90.8% mit max_depth=6/colsample=0.8, aber BA sinkt. Baseline S6 bleibt aktiv.)
 
 **Wichtige Regel:** CLAUDE.md immer nach abgeschlossenen Schritten aktualisieren — nie auf Basis von laufenden oder geplanten Ergebnissen schreiben. Metriken immer aus Reports lesen, nicht schätzen.
 
@@ -63,18 +63,37 @@ Copy-Item outputs/reports/training_report_MERTv1330M_*.json ..\Spotilyzer\models
 
 Verbesserung des Hit/Mid/Flop-Klassifikators für Spotilyzer.
 
-### Aktueller Modellstand (Stand 2026-03-19, Quelle: evaluation_reports)
+### Aktueller Modellstand (Stand 2026-03-20, Quelle: evaluation_reports)
 
 Alle Metriken auf echtem Holdout-Set (20%). Datensatz: validated-only.
 
 | Modell | Datensatz | Holdout | BA | Hit R. | Flop R. | Status |
 |--------|-----------|---------|-----|--------|---------|--------|
-| `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~8960 val. | 1173 | **63.0%** | **72.8%** | 68.7% | **Aktiv** |
+| `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~22.722 val. | 4545 | **64.2%** | **82.5%** | 73.5% | **Aktiv** |
+| (Session 5) `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~8960 val. | 1173 | 63.0% | 72.8% | 68.7% | Überschrieben |
 | `MERTv1330M_main+spotify_charts_validated_20260319` | 5660 val. | 1132 | 60.9% | 55.1% | 69.2% | Vorgänger |
 | `MERTv195M_main+spotify_charts_validated_20260319` | 5660 val. | 1132 | 57.4% | 47.7% | 68.7% | Vorgänger |
 | `MERTv1330M_validated_20260318` | 5262 val. | 967 | 57.5% | 37.5% | 71.1% | Vorgänger |
 | `MERTv195M_validated_20260318` | 5262 val. | 967 | 53.2% | 27.3% | 68.9% | Vorgänger |
 | `MERTv195M_origparams_validated_20260318` | 5262 val. | 967 | 52.6% | 24.8% | 69.2% | Referenz |
+
+**Session-7-Befund: Balancing-Experimente (2026-03-20)** — 4 Experimente auf Holdout-Set S6 (n=4545, außer expA/C mit reduziertem Holdout):
+
+| Experiment | Konfiguration | BA | Hit R. | Mid R. | Flop R. |
+|-----------|--------------|-----|--------|--------|---------|
+| Baseline S6 | Standard (max_depth=4, col=0.6) | **64.2%** | **82.5%** | 36.6% | **73.5%** |
+| expA | max_hits=6000 | 62.8% | 73.1% | 41.2% | 74.2% |
+| expB | boost mid×1.5, flop×1.2 | 64.0% | 69.0% | **50.3%** | 72.8% |
+| expC | max_hits=6000 + boost | 62.1% | 58.5% | 57.1% | 70.8% |
+| expDim | max_depth=6, colsample=0.8 | 62.3% | **90.8%** | 30.8% | 65.3% |
+
+Kein Experiment schlägt die Baseline in BA. Klare Befunde:
+- **Undersampling (expA/C):** Hit Recall −9–24pp, Mid Recall +5–21pp — ungünstiger Trade
+- **Boost (expB):** BA stabil (−0.2pp), Mid Recall +14pp, aber Hit Recall −14pp
+- **expDim:** Hit Recall **90.8%** (+8.3pp!), aber Flop −8.2pp, Mid −6pp, BA −1.9pp. Die 330M-Regularisierung (max_depth=4, col=0.6) dämpft Hit-Erkennung ohne BA-Gewinn — sweet spot liegt vermutlich bei max_depth=5
+- BA≥65% noch nicht erreicht — braucht neue Strategie (mehr Mid-Samples oder anderer Algorithmus)
+
+**Session-6-Befund:** kworb auf 12 Märkte erweitert (+ fr/au/ca mit Weight 0.85, it/se/nl mit 0.70). Bug fix: HIT_THRESHOLDS kannte nur Weights 1.0/0.85/0.70 — neue 0.5-Märkte wären nie als Hit klassifiziert worden. 15.684 neue Tracks, 16.481 neue Previews. Nach Dedup-Fix (35.530 → 26.004 Embeddings): Trainingsdatensatz 22.722 validated, 14.991 Hits. Hit Recall: 72.8% → **82.5% (+9.7pp) — Primärziel ≥80% erreicht**. Mid Recall sank von ~46% auf 36.6% (Mid-Klasse durch Hit-Flut zerrieben). BA 64.2% — noch 0.8pp bis Ziel ≥65%.
 
 **Session-5-Befund:** kworb-Modul (Kworb.net _weekly_totals, 6 Märkte) lieferte 2738 neue Tracks, 2497 Hits → Hit-Count von 1216 auf ~3700 verdreifacht. Hit Recall 330M: 55.1% → 72.8% (+17.7pp). Trend stabil: je +600 Hits → je +17–18pp Hit Recall. Kworb-Track-IDs waren bereits alle in Embeddings vorhanden (populäre Tracks vom Deezer-Scouting bereits erfasst). Confusion: 137 Hits als Mid klassifiziert — Mid-Klasse bleibt die größte Fehlerquelle.
 
@@ -86,7 +105,7 @@ Alle Metriken auf echtem Holdout-Set (20%). Datensatz: validated-only.
 
 **Strategische Konsequenz:** Hit Recall 72.8% — noch 7.2pp bis Ziel ≥80%. Nächster Schritt: weiteres Datenwachstum (mehr Märkte in Kworb, neue Spotify-Charts-Snapshots) oder Hyperparameter-Tuning.
 
-### Aktueller Datensatz-Stand (2026-03-19, Session 5)
+### Aktueller Datensatz-Stand (2026-03-19, Session 6)
 
 Kombinierter Datensatz: Haupt-JSONL (Deezer-Scouting) + spotify_charts-Modul + kworb-Modul
 
@@ -94,23 +113,24 @@ Kombinierter Datensatz: Haupt-JSONL (Deezer-Scouting) + spotify_charts-Modul + k
 |--------|--------|-----------|-------------|------------|
 | main (Deezer) | 9.661 | 5.262 | 637 | 8.794 |
 | spotify_charts | 960 | 960 | 579 | 960 |
-| kworb | 2.738 | 2.738 | 2.497 | 2.738 (bereits in main) |
-| **Gesamt (dedup)** | **~13.100** | **~8.960** | **~3.713** | **9.526** |
+| kworb | ~18.900 | ~18.900 | ~14.000 | 26.004 (dedup, inkl. main-Overlap) |
+| **Gesamt (dedup)** | **~28.400** | **~22.722** | **~14.991** | **26.004** |
 
-**Holdout-Set (Session 5):** 1173 Samples (415 Flops, 298 Hits, 460 Mids) — 20% aus ~8960 validated
+**Holdout-Set (Session 6):** 4545 Samples (415 Flops, 2999 Hits, 1131 Mids) — 20% aus ~22.722 validated
 
 **Spotify Charts abgedeckt (2026-03-19):**
 - `regional-{us/gb/de/jp/br/mx/global}-weekly-2026-03-12.csv`
 - Pfad: `G:/Dev/SpotilyzerData/spotify/2026-03-19/`
 - Match-Rate: 978/994 (98.4%) via Deezer-Suche; 16 Misses (vermutlich JP-Kanji)
 
-**Kworb abgedeckt (2026-03-19):**
-- Märkte: us, gb, de, jp, br, mx — `_weekly_totals` (kumulierte Historie seit 2013)
-- Filter: Total ≥ 20.000.000 Streams → 3000 Top-Tracks nach Dedup
-- Match-Rate: 2738/3000 (91.3%) via Deezer-Suche; 262 Misses (Spotify-Exklusives / regionale Lücken)
+**Kworb abgedeckt (2026-03-19, Session 6):**
+- Märkte: us, gb, de, jp, br, mx (Weight 1.0/0.85) + fr, au, ca (0.85) + it, se, nl (0.70) — `_weekly_totals` (kumulierte Historie seit 2013)
+- Filter: Total ≥ 20.000.000 Streams → 18.928 Unique Tracks nach Dedup
+- Match-Rate: 16.524/16.841 (98.1%) via Deezer-Suche; 317 Misses
 - ISRC: `--skip-mb` (alle via Artist+Title-Suche); `enrich_isrc.py` für spätere ISRC-Anreicherung geplant
+- Labels: 12.998 Hits, 3.526 Mids (kworb-Datensatz allein)
 
-**Nächster Schritt:** Weitere Datenwachstums-Optionen (neue Spotify-Charts-Snapshots, ggf. weitere Kworb-Märkte) oder Hyperparameter-Tuning für die letzten 7.2pp bis Hit Recall ≥80%.
+**Nächster Schritt:** BA ≥65% (noch 0.8pp) — Optionen: Mid-Klasse stärken (Hyperparameter-Tuning, compute_labels.py Bug 3), neue Chart-Quellen (ODJC, aCharts).
 
 ---
 
@@ -1014,10 +1034,13 @@ Alle Werte auf echtem Holdout-Set (20%). Quelle: `evaluation_report_*.json`
 - [x] ~~spotify_charts-Modul~~ ✅ (2026-03-19, scout_spotify.py + --dataset-Flag in allen Skripten)
 - [x] ~~Training + Eval auf main+spotify_charts~~ ✅ (2026-03-19, 330M: BA=60.9%, Hit R.=55.1%)
 - [x] ~~evaluate.py --dataset-Flag + Autodetect-Fix~~ ✅ (2026-03-19)
-- [ ] `models/MODEL_COMPARISON.md` in Spotilyzer aktualisieren (Session-5-Metriken eintragen)
+- [x] ~~`models/MODEL_COMPARISON.md` in Spotilyzer aktualisieren~~ ✅ (2026-03-19, Session 6)
 - [ ] `compute_labels.py` Bug 3 fixen: Dissent-Logik schickt Widersprüche zu "mid" statt "contested"
 - [x] ~~kworb-Modul implementieren~~ ✅ (scout_kworb.py + Checkpoint-System, 2026-03-19)
 - [x] ~~Training + Eval auf main+spotify_charts+kworb~~ ✅ (330M: BA=63.0%, Hit R.=72.8%, 2026-03-19)
+- [x] ~~kworb auf 12 Märkte erweitern~~ ✅ (fr/au/ca/it/se/nl, Bug-Fix HIT_THRESHOLDS, 2026-03-19)
+- [x] ~~Hit Recall ≥80% erreichen~~ ✅ (82.5%, Session 6, 2026-03-19)
+- [x] ~~Balancing-Experimente (expA/B/C/Dim)~~ ✅ (2026-03-20) — kein Experiment schlägt Baseline; expDim-Befund: sweet spot max_depth=5 (zwischen 4 und 6)
 
 ### Modul-System: Kworb-Scraper (abgeschlossen)
 

@@ -6,8 +6,20 @@ embedder:
   model: "m-a-p/MERT-v1-95M"   # Optionen: "m-a-p/MERT-v1-95M" | "m-a-p/MERT-v1-330M"
 
 # Optionales Experiment-Label (erscheint im Modell-Dateinamen, leer lassen wenn nicht benötigt)
-# Beispiel: experiment_label: ""  → spotilyzer_model_MERTv195M_origparams_validated_20260318.joblib
+# Beispiel: experiment_label: "balA"  → spotilyzer_model_MERTv1330M_balA_...joblib
 experiment_label: ""
+
+# Klassengewicht-Multiplikatoren (werden auf compute_sample_weight("balanced") draufmultipliziert)
+# 1.0 = keine Änderung. Erhöhe mid/flop um deren Recall zu verbessern.
+# Experimente:
+#   balA: nur --max-hits 6000, boost alle 1.0
+#   balB: kein Undersampling, mid=1.5 flop=1.2
+#   balC: --max-hits 6000 + mid=1.5 flop=1.2
+#   expDim: höhere Dimension, 330M mit max_depth=6 + colsample=0.8
+class_weight_boost:
+  hit: 1.0
+  mid: 1.0
+  flop: 1.0
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Per-Embedder XGBoost-Parameter

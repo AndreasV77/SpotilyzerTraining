@@ -420,6 +420,13 @@ def main():
         help="Nur Tracks mit robustness='validated' verwenden (entfernt contested + single_source)"
     )
     parser.add_argument(
+        "--max-hits",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Hit-Undersampling: max. N Hit-Samples im Training (z.B. 6000). Default: alle."
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Nur Daten laden, nicht trainieren"
@@ -473,6 +480,8 @@ def main():
         print(f"    {name}: {len(d)} Tracks geladen")
     print(f"    Gesamt (nach Dedup): {len(merged_tracks)} Tracks")
 
+    random_state = training_cfg.get("random_state", 42)
+
     # Sample-Weights aus thresholds.yaml
     sample_weights_cfg = thresholds_cfg.get("sample_weights", {
         "validated": 1.0,
@@ -489,6 +498,41 @@ def main():
         embeddings_dir, merged_tracks, sample_weights_cfg,
         validated_only=args.validated_only,
     )
+
+    # ── Hit-Undersampling (--max-hits) ───────────────────────────────────────
+    max_hits_applied = None
+    if args.max_hits is not None:
+        hit_label = label_encoder.transform(["hit"])[0]
+        hit_mask = (y == hit_label)
+        hit_count = int(hit_mask.sum())
+        if args.max_hits < hit_count:
+            rng = np.random.default_rng(random_state)
+            hit_indices = np.where(hit_mask)[0]
+            keep_hits = rng.choice(hit_indices, size=args.max_hits, replace=False)
+            non_hit_indices = np.where(~hit_mask)[0]
+            keep_all = np.sort(np.concatenate([non_hit_indices, keep_hits]))
+            X = X[keep_all]
+            y = y[keep_all]
+            sample_weights = sample_weights[keep_all]
+            meta_df = meta_df.iloc[keep_all].reset_index(drop=True)
+            max_hits_applied = args.max_hits
+            print(f"\n  Hit-Undersampling: {hit_count} → {args.max_hits} Hits (--max-hits)")
+            print(f"  Neue Verteilung:")
+            for lbl in ["flop", "mid", "hit"]:
+                enc = label_encoder.transform([lbl])[0]
+                count = int((y == enc).sum())
+                print(f"    {lbl:5}: {count:>5} ({100 * count / len(y):.1f}%)")
+        else:
+            print(f"  --max-hits={args.max_hits} >= vorhandene Hits ({hit_count}) — kein Undersampling")
+
+    # ── Class-Weight-Boost aus training.yaml ─────────────────────────────────
+    boost_cfg = training_cfg.get("class_weight_boost", {})
+    if boost_cfg and any(v != 1.0 for v in boost_cfg.values()):
+        label_names = label_encoder.inverse_transform(y)
+        boost_array = np.array([boost_cfg.get(lbl, 1.0) for lbl in label_names], dtype=np.float32)
+        sample_weights = sample_weights * boost_array
+        print(f"\n  Class-Weight-Boost: hit={boost_cfg.get('hit', 1.0)} "
+              f"mid={boost_cfg.get('mid', 1.0)} flop={boost_cfg.get('flop', 1.0)}")
 
     print(f"\n  Dataset:")
     print(f"    Features:       {X.shape[1]} (MERT embedding dim)")
@@ -510,7 +554,6 @@ def main():
     if logger:
         logger.info(f"XGBoost-Parameter aus: {params_source}")
 
-    random_state = training_cfg.get("random_state", 42)
     target_metrics = training_cfg.get("target_metrics", {})
     early_stopping_rounds = training_cfg.get("early_stopping_rounds", 30)
 
@@ -588,6 +631,8 @@ def main():
             "params": xgb_params,
             "experiment_label": exp_label or None,
             "sample_weight": True,
+            "max_hits": max_hits_applied,
+            "class_weight_boost": boost_cfg or None,
         },
         "metrics": metrics,
         "target_metrics": target_metrics,

@@ -27,7 +27,8 @@ Output-Schema (pro Track):
 
 Kworb-URL-Schema:
   https://kworb.net/spotify/country/{market}_weekly_totals.html
-  Märkte: us, gb, de, jp, br, mx
+  Phase-1-Märkte: us, gb, de, jp, br, mx
+  Phase-2-Märkte: fr, au, ca, it, se, nl
 
 Filter-Kriterien (--min-streams, --quality-only):
   Default: Total >= 2_000_000 ODER (Pk <= 50 AND Wks >= 4)
@@ -58,23 +59,40 @@ DEEZER_API_BASE = "https://api.deezer.com"
 MB_API_BASE     = "https://musicbrainz.org/ws/2"
 MB_USER_AGENT   = "SpotilyzerTraining/1.0 (github.com/AndreasV77/SpotilyzerTraining)"
 
-# Phase-1-Märkte
-DEFAULT_MARKETS = ["us", "gb", "de", "jp", "br", "mx"]
+# Phase-1-Märkte (Session 5)
+PHASE1_MARKETS = ["us", "gb", "de", "jp", "br", "mx"]
+# Phase-2-Märkte (Session 6)
+PHASE2_MARKETS = ["fr", "au", "ca", "it", "se", "nl"]
 
-# Markt-Gewichte (identisch zu scout_spotify.py)
+DEFAULT_MARKETS = PHASE1_MARKETS + PHASE2_MARKETS
+
+# Markt-Gewichte
+# Tier A (1.0):  us, gb — globale Referenzmärkte
+# Tier B (0.85): de, jp, br, fr, au, ca — große Export-/Sprachmärkte
+# Tier C (0.70): mx, it, se, nl — mittelgroße Märkte mit eigener Szene
+# Tier D (0.50): alle anderen → Default via .get(..., 0.50)
 MARKET_WEIGHTS = {
     "us": 1.0,
     "gb": 1.0,
     "de": 0.85,
     "jp": 0.85,
     "br": 0.85,
+    "fr": 0.85,   # Phase 2
+    "au": 0.85,   # Phase 2
+    "ca": 0.85,   # Phase 2
     "mx": 0.70,
+    "it": 0.70,   # Phase 2
+    "se": 0.70,   # Phase 2
+    "nl": 0.70,   # Phase 2
 }
 
+# Hit-Schwellenwerte je Tier (peak_rank <= threshold → Hit-Label)
+# Tier D (0.50): top 10 in einem kleineren Markt → Hit (z.B. Norwegen, Polen)
 HIT_THRESHOLDS = {
     1.0:  100,
     0.85:  50,
     0.70:  20,
+    0.50:  10,
 }
 
 DEFAULT_MIN_STREAMS = 2_000_000

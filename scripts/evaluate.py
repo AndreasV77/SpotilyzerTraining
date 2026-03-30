@@ -161,6 +161,40 @@ def load_evaluation_data(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# POST-HOC ADJUSTMENTS
+# Klassen-Index: flop=0, hit=1, mid=2 (LabelEncoder alphabetisch)
+# predict_proba Reihenfolge: [p_flop, p_hit, p_mid]
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _logit_adjustment(probs: np.ndarray, class_priors: np.ndarray, tau: float) -> np.ndarray:
+    """p'(c) ∝ p(c) / π(c)^τ  — re-normalisiert auf Summe=1."""
+    if tau == 0.0:
+        return probs.copy()
+    adjustment = np.clip(class_priors, 1e-9, None) ** tau
+    adjusted = np.clip(probs / adjustment, 1e-12, None)
+    return adjusted / adjusted.sum(axis=1, keepdims=True)
+
+
+def _two_threshold_predict(probs: np.ndarray, theta_hit: float, theta_flop: float) -> np.ndarray:
+    """Mid als Default; Hit wenn p(hit)>θ_hit; Flop wenn p(flop)>θ_flop (und nicht Hit)."""
+    preds = np.full(len(probs), 2, dtype=int)   # Default: mid=2
+    preds[probs[:, 1] > theta_hit] = 1           # hit=1
+    flop_mask = (probs[:, 0] > theta_flop) & (preds != 1)
+    preds[flop_mask] = 0                          # flop=0
+    return preds
+
+
+def _compute_class_priors_from_labels(y: np.ndarray) -> np.ndarray:
+    """Berechnet Priors aus int-Labels [0=flop,1=hit,2=mid]."""
+    priors = np.array([
+        (y == 0).mean(),
+        (y == 1).mean(),
+        (y == 2).mean(),
+    ])
+    return priors
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # EVALUATION
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -170,11 +204,44 @@ def evaluate_model(
     X: np.ndarray,
     labels: np.ndarray,
     sample_weights: np.ndarray = None,
+    tau: float = None,
+    theta_hit: float = None,
+    theta_flop: float = None,
 ) -> dict:
-    """Fuehrt vollstaendige Evaluation durch."""
+    """
+    Fuehrt vollstaendige Evaluation durch.
+
+    Optionale Post-hoc Adjustments (aus tune_postprocessing.py ermitteln):
+        tau:        Logit-Adjustment Staerke (0=off; typ. 0.5-1.5)
+        theta_hit:  Schwelle fuer Hit-Entscheidung (None=argmax)
+        theta_flop: Schwelle fuer Flop-Entscheidung (None=argmax)
+    """
     y = label_encoder.transform(labels)
-    y_pred = model.predict(X)
     y_pred_proba = model.predict_proba(X)
+
+    # Post-hoc Adjustments anwenden
+    probs = y_pred_proba.copy()
+    postprocess_info = {}
+
+    if tau is not None and tau > 0.0:
+        class_priors = _compute_class_priors_from_labels(y)
+        probs = _logit_adjustment(probs, class_priors, tau)
+        postprocess_info["tau"] = tau
+        postprocess_info["class_priors"] = {
+            "flop": float(class_priors[0]),
+            "hit":  float(class_priors[1]),
+            "mid":  float(class_priors[2]),
+        }
+
+    if theta_hit is not None and theta_flop is not None:
+        y_pred = _two_threshold_predict(probs, theta_hit, theta_flop)
+        postprocess_info["theta_hit"] = theta_hit
+        postprocess_info["theta_flop"] = theta_flop
+    else:
+        y_pred = np.argmax(probs, axis=1)
+
+    if postprocess_info:
+        print(f"  Post-hoc Adjustment: {postprocess_info}")
 
     # Basis-Metriken
     metrics = {
@@ -183,6 +250,9 @@ def evaluate_model(
         "f1_macro": float(f1_score(y, y_pred, average="macro")),
         "f1_weighted": float(f1_score(y, y_pred, average="weighted")),
     }
+
+    if postprocess_info:
+        metrics["postprocess"] = postprocess_info
 
     # Confusion Matrix
     cm = confusion_matrix(y, y_pred)
@@ -204,7 +274,7 @@ def evaluate_model(
             "support": int(report[cls]["support"]),
         }
 
-    # Prediction-Confidence-Statistiken
+    # Prediction-Confidence-Statistiken (aus Original-Probs, vor Adjustment)
     max_proba = y_pred_proba.max(axis=1)
     metrics["confidence_stats"] = {
         "mean": float(max_proba.mean()),
@@ -368,7 +438,33 @@ def main():
         action="store_true",
         help="Nur Tracks mit robustness='validated' evaluieren (contested + single_source werden ausgeschlossen)"
     )
+    parser.add_argument(
+        "--tau",
+        type=float,
+        default=None,
+        metavar="TAU",
+        help="Logit-Adjustment Staerke (0.0=off; optimal via tune_postprocessing.py ermitteln)"
+    )
+    parser.add_argument(
+        "--theta-hit",
+        type=float,
+        default=None,
+        metavar="THETA",
+        help="Zweistufen-Schwelle fuer Hit (zusammen mit --theta-flop; optimal via tune_postprocessing.py)"
+    )
+    parser.add_argument(
+        "--theta-flop",
+        type=float,
+        default=None,
+        metavar="THETA",
+        help="Zweistufen-Schwelle fuer Flop (zusammen mit --theta-hit)"
+    )
     args = parser.parse_args()
+
+    # Plausibilitaets-Check: Schwellen muessen gemeinsam gesetzt sein
+    if (args.theta_hit is None) != (args.theta_flop is None):
+        print("  Fehler: --theta-hit und --theta-flop muessen gemeinsam gesetzt werden.")
+        sys.exit(1)
 
     # --embedder setzt embeddings-dir und (wenn kein explizites --model) das Modell automatisch
     if args.embedder:
@@ -458,6 +554,9 @@ def main():
         model, label_encoder,
         X, merged_df["label"].values,
         sample_weights,
+        tau=args.tau,
+        theta_hit=args.theta_hit,
+        theta_flop=args.theta_flop,
     )
 
     target_metrics = training_cfg.get("target_metrics", {})

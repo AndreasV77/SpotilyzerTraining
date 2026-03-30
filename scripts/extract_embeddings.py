@@ -61,6 +61,13 @@ MAX_AUDIO_LENGTH_SEC = 30
 # Alle N erfolgreichen Tracks einen Checkpoint schreiben
 CHECKPOINT_INTERVAL = 500
 
+# GPU-Throttling (Windows: verhindert Display-Treiber-Absturz bei Dauerlast)
+# VRAM-Limit: 0.85 → ~5.1 GB auf GTX 1660 Ti (6 GB), lässt ~0.9 GB für Display
+GPU_MEMORY_FRACTION = 0.85
+# Pause zwischen Tracks in Sekunden (0.05s → ~13 Min Extra bei 16k Tracks)
+# Verhindert sustained 100% GPU-Compute-Last → OS/Display bleibt stabil
+INTER_TRACK_SLEEP_SEC = 0.05
+
 # Logger (wird in main() initialisiert)
 logger = None
 
@@ -78,6 +85,12 @@ class MERTEmbedder:
         print(f"  Lade MERT-Modell auf {self.device.upper()}...")
         if logger:
             logger.info(f"Lade MERT-Modell {model_name} auf {self.device.upper()}")
+
+        # VRAM-Limit setzen (verhindert Display-Treiber-Absturz auf Windows)
+        if self.device == "cuda":
+            torch.cuda.set_per_process_memory_fraction(GPU_MEMORY_FRACTION)
+            if logger:
+                logger.info(f"VRAM-Limit: {GPU_MEMORY_FRACTION:.0%} (GPU_MEMORY_FRACTION)")
 
         self.processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
         self.model = AutoModel.from_pretrained(model_name, trust_remote_code=True)
@@ -317,6 +330,10 @@ def process_batch(
             embedding_idx=len(embeddings_list) - 1,
         ))
         stats["success"] += 1
+
+        # GPU-Throttling: kurze Pause damit Display-Treiber Luft bekommt
+        if INTER_TRACK_SLEEP_SEC > 0:
+            time.sleep(INTER_TRACK_SLEEP_SEC)
 
         # Checkpoint alle CHECKPOINT_INTERVAL erfolgreiche Tracks
         total_done = already_done + stats["success"]
