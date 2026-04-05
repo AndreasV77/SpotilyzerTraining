@@ -7,6 +7,8 @@ Arbeitsdokument für das Modell-Training-Subprojekt von Spotilyzer.
 
 **Wichtige Regel:** CLAUDE.md immer nach abgeschlossenen Schritten aktualisieren — nie auf Basis von laufenden oder geplanten Ergebnissen schreiben. Metriken immer aus Reports lesen, nicht schätzen.
 
+**Hinweis zu AGENTS.md:** Die Datei `AGENTS.md` im Repo-Root ist ein veraltetes Duplikat dieser CLAUDE.md (Stand Session 5), das automatisch für andere KI-Assistenten (OpenAI Codex etc.) angelegt wurde. Sie wird nicht gepflegt und nicht getrackt — maßgeblich ist ausschließlich diese CLAUDE.md.
+
 ---
 
 ## Repository-Informationen

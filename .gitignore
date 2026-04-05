@@ -28,6 +28,9 @@ logs/
 # Claude Code Metadaten
 .claude/
 
+# Veraltetes KI-Assistenten-Duplikat (nicht gepflegt, maßgeblich ist CLAUDE.md)
+AGENTS.md
+
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb_checkpoints
