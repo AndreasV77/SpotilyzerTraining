@@ -3,7 +3,7 @@
 Arbeitsdokument für das Modell-Training-Subprojekt von Spotilyzer.
 
 **Erstellt:** 2026-03-07
-**Zuletzt aktualisiert:** 2026-03-31 (Session 8: depth-Sweep expD5a/b abgeschlossen — sweet-spot-Hypothese widerlegt, depth=4 bleibt BA-Optimum. Post-hoc Logit-Adjustment τ=0.25 → BA=65.3% erreichbar, aber Hit Recall fällt auf 73.2%. tune_postprocessing.py + evaluate.py --tau/--theta implementiert.)
+**Zuletzt aktualisiert:** 2026-05-04 (Session 9: Embedding-Mismatch-Test durchgeführt — 63% Label-Übereinstimmung, Prob-Shift 0.10 → SIGNIFIKANT. Retrain auf 30s-Previews löst das Problem nicht. Strategische Entscheidung über Inferenz-Ansatz steht aus.)
 
 **Wichtige Regel:** CLAUDE.md immer nach abgeschlossenen Schritten aktualisieren — nie auf Basis von laufenden oder geplanten Ergebnissen schreiben. Metriken immer aus Reports lesen, nicht schätzen.
 
@@ -119,6 +119,34 @@ Post-hoc Logit-Adjustment τ-Sweep auf Baseline S6 (`_20260319`, n=4545):
 Combined best (τ=0.25, θ_hit=0.45, θ_flop=0.35): BA=**65.7%**, Hit=76.4%. BA-Ziel erreichbar, aber BA≥65% und Hit Recall≥80% gleichzeitig nicht darstellbar via Post-hoc Adjustment.
 
 Leakage-Befund: 88.4% der Holdout-Tracks von Künstlern, die auch im Training vorkommen → alle Metriken optimistisch verzerrt. Für unbiasierte Evaluation: GroupKFold mit artist_id erforderlich.
+
+**Session-9-Befund: Embedding-Mismatch-Test (2026-05-04)**
+
+Hintergrund: Das Hauptprojekt (Spotilyzer) wurde auf Full-Track-Analyse umgestellt — MERT verarbeitet jetzt den ganzen Track (30s-Chunks → Mean-Pool) statt wie bisher die ersten 30s. Test mit 19 Full-Length-Tracks (`scripts/test_embedding_mismatch.py`):
+
+| Metrik | Ergebnis |
+|--------|----------|
+| Label-Übereinstimmung (alt vs. neu) | 12/19 = **63%** |
+| Mittlerer Prob-Shift | **0.1036** |
+| Max Prob-Shift | 0.3557 |
+| Bewertung | **SIGNIFIKANT** |
+
+Extreme Ausreißer: AndreasV — Alive in the Night (Euphoria Mix): flop→hit (Shift 0.53), Become (Tri-Funk): flop→mid (Shift 0.40). Songs mit langen instrumentalen Passagen (Sloe Gin, Nothing Else Matters, Hey Joe) kippen zum Flop — spätere Chunks ruhiger/instrumentaler als Deezer-Preview.
+
+**Kernproblem:** Retrain auf 30s-Previews würde nichts ändern — 1 Chunk à 30s → Mean von 1 Embedding = identisches Ergebnis. Der Mismatch ist strukturell:
+
+| | Training | Inferenz (Hauptprojekt neu) |
+|--|--|--|
+| Input | Deezer 30s-Preview (kuratiert) | Voller Track, alle 30s-Chunks gemittelt |
+| Embedding | 1 Clip → 1 Embedding | N Chunks → Mean-Pool |
+
+**Optionen (Entscheidung ausstehend):**
+- A) Inferenz zurück auf Single-Clip (Energie-Max) → konsistent mit Training, kein Mismatch
+- B) Volltracks für Training beschaffen → korrekt, aber aufwändig
+- C) Mismatch akzeptieren und dokumentieren
+- D) Zwei Scores: XGBoost mit Single-Clip (Hit-Potential), CLAP-Chunking separat (Mood/Genre)
+
+**Offene Frage Trainingsdaten:** ~200k Songs der privaten Bibliothek als Trainingsquelle? Vermutlich wenig geeignet (~80% Rock/Metal, überwiegend ältere Titel → Datensatz-Bias).
 
 **Session-6-Befund:** kworb auf 12 Märkte erweitert (+ fr/au/ca mit Weight 0.85, it/se/nl mit 0.70). Bug fix: HIT_THRESHOLDS kannte nur Weights 1.0/0.85/0.70 — neue 0.5-Märkte wären nie als Hit klassifiziert worden. 15.684 neue Tracks, 16.481 neue Previews. Nach Dedup-Fix (35.530 → 26.004 Embeddings): Trainingsdatensatz 22.722 validated, 14.991 Hits. Hit Recall: 72.8% → **82.5% (+9.7pp) — Primärziel ≥80% erreicht**. Mid Recall sank von ~46% auf 36.6% (Mid-Klasse durch Hit-Flut zerrieben). BA 64.2% — noch 0.8pp bis Ziel ≥65%.
 
@@ -1051,6 +1079,10 @@ Alle Werte auf echtem Holdout-Set (20%). Quelle: `evaluation_report_*.json`
 ## Offene Aufgaben
 
 ### Kurzfristig (nächste Session)
+- [ ] **Strategische Entscheidung Inferenz-Ansatz:** Option A (Single-Clip Energie-Max), B (Volltracks), C (Mismatch akzeptieren) oder D (zwei Scores) — siehe Session-9-Befund
+- [ ] Eigene Bibliothek (~200k Songs) auf Eignung als Trainingsdaten prüfen (geschätzt: wenig geeignet, 80% Rock/Metal, überwiegend alt)
+
+
 - [x] ~~95M Embeddings extrahieren~~ ✅ (2026-03-17, 8738 Samples)
 - [x] ~~95M Neutraining~~ ✅ (MERTv195M_20260317, BA=47.8% — schlechter als 330M)
 - [x] ~~Recon-Lauf~~ ✅ (2026-03-18, alle validated + suspicious Charts geprüft)
