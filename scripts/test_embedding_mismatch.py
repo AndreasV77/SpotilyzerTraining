@@ -31,6 +31,7 @@ import joblib
 import numpy as np
 import torch
 import torchaudio
+from transformers import AutoModel, AutoProcessor
 
 # Projekt-Root zu sys.path hinzufügen damit _utils importierbar ist
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -141,11 +142,11 @@ def main():
     training_cfg = load_training_config()
     cfg_model = training_cfg.get("embedder", {}).get("model", _DEFAULT_MODEL)
 
-    # Aktives Modell finden (neuestes *kworb*validated*.joblib)
+    # Aktives Modell finden: neuestes spotilyzer_model_*.joblib (nach mtime)
     project_root = Path(__file__).resolve().parent.parent
     models_dir = project_root / "outputs" / "models"
     candidate_models = sorted(
-        models_dir.glob("spotilyzer_model_MERTv1330M_main+spotify_charts+kworb_validated_*.joblib"),
+        models_dir.glob("spotilyzer_model_*.joblib"),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
@@ -208,7 +209,6 @@ def main():
     print(f"OK  (Klassen: {classes})")
 
     # MERT laden
-    from transformers import AutoModel, AutoProcessor
     print("  Lade MERT-Modell (kann ~30s dauern)...")
     processor = AutoProcessor.from_pretrained(args.mert_model, trust_remote_code=True)
     mert = AutoModel.from_pretrained(args.mert_model, trust_remote_code=True)

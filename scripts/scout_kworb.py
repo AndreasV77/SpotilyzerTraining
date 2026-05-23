@@ -378,22 +378,30 @@ def get_isrc_by_artist_title(artist: str, title: str, cache: dict) -> Optional[s
 # ══════════════════════════════════════════════════════════════════════════════
 
 def deezer_get(endpoint: str, params: dict = None, delay: float = 0.3) -> Optional[dict]:
-    """Deezer API GET."""
+    """Deezer API GET mit Retry bei 429 Rate Limit (max. 3 Versuche, Backoff 5/15/30s)."""
     url = f"{DEEZER_API_BASE}/{endpoint}"
-    try:
-        resp = requests.get(url, params=params, timeout=10)
-        time.sleep(delay)
-        if resp.status_code == 200:
-            data = resp.json()
-            if "error" not in data:
-                return data
-        elif resp.status_code == 429:
-            logger.warning("Deezer Rate Limit, warte 5s...")
-            time.sleep(5)
-        return None
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Deezer Fehler: {e}")
-        return None
+    backoff_seconds = [5, 15, 30]
+    for attempt, wait in enumerate(backoff_seconds + [None], start=1):
+        try:
+            resp = requests.get(url, params=params, timeout=10)
+            time.sleep(delay)
+            if resp.status_code == 200:
+                data = resp.json()
+                if "error" not in data:
+                    return data
+                return None
+            if resp.status_code == 429:
+                if wait is None:
+                    logger.warning(f"Deezer Rate Limit nach {attempt - 1} Retries — aufgegeben: {endpoint}")
+                    return None
+                logger.warning(f"Deezer Rate Limit (Versuch {attempt}), warte {wait}s...")
+                time.sleep(wait)
+                continue
+            return None
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Deezer Fehler: {e}")
+            return None
+    return None
 
 
 def lookup_deezer_by_isrc(isrc: str) -> Optional[dict]:
