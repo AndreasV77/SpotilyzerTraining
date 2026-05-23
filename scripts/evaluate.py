@@ -203,7 +203,7 @@ def evaluate_model(
     label_encoder,
     X: np.ndarray,
     labels: np.ndarray,
-    sample_weights: np.ndarray = None,
+    robustness_labels: np.ndarray = None,
     tau: float = None,
     theta_hit: float = None,
     theta_flop: float = None,
@@ -212,9 +212,10 @@ def evaluate_model(
     Fuehrt vollstaendige Evaluation durch.
 
     Optionale Post-hoc Adjustments (aus tune_postprocessing.py ermitteln):
-        tau:        Logit-Adjustment Staerke (0=off; typ. 0.5-1.5)
-        theta_hit:  Schwelle fuer Hit-Entscheidung (None=argmax)
-        theta_flop: Schwelle fuer Flop-Entscheidung (None=argmax)
+        tau:               Logit-Adjustment Staerke (0=off; typ. 0.5-1.5)
+        theta_hit:         Schwelle fuer Hit-Entscheidung (None=argmax)
+        theta_flop:        Schwelle fuer Flop-Entscheidung (None=argmax)
+        robustness_labels: String-Array mit Robustheitswerten je Sample (direkt aus DataFrame)
     """
     y = label_encoder.transform(labels)
     y_pred_proba = model.predict_proba(X)
@@ -283,11 +284,12 @@ def evaluate_model(
         "max": float(max_proba.max()),
     }
 
-    # Per-Robustness Evaluation
-    if sample_weights is not None:
+    # Per-Robustness Evaluation — direkt aus Robustheitslabels (nicht aus Gewichten ableiten,
+    # da class_weight_boost die Gewichte verändert und die Zuordnung dann bricht)
+    if robustness_labels is not None:
         robustness_metrics = {}
-        for weight_val, rob_name in [(1.0, "validated"), (0.5, "single_source"), (0.7, "contested")]:
-            mask = np.isclose(sample_weights, weight_val, atol=0.05)
+        for rob_name in ["validated", "single_source", "contested"]:
+            mask = robustness_labels == rob_name
             if mask.sum() > 0:
                 rob_acc = float(balanced_accuracy_score(y[mask], y_pred[mask]))
                 robustness_metrics[rob_name] = {
@@ -553,7 +555,7 @@ def main():
     metrics = evaluate_model(
         model, label_encoder,
         X, merged_df["label"].values,
-        sample_weights,
+        robustness_labels=merged_df["robustness"].values,
         tau=args.tau,
         theta_hit=args.theta_hit,
         theta_flop=args.theta_flop,

@@ -130,7 +130,7 @@ def load_data(
 
     # Label-Encoding
     label_encoder = LabelEncoder()
-    label_encoder.fit(["flop", "mid", "hit"])  # Feste Reihenfolge
+    label_encoder.fit(["flop", "mid", "hit"])  # LabelEncoder sortiert alphabetisch: flop=0, hit=1, mid=2
     y = label_encoder.transform(labels)
 
     # Metadata-DF fuer Reporting
@@ -253,23 +253,23 @@ def train_model(
         for cls in ["flop", "hit", "mid"]
     }
 
-    # Cross-Validation mit sample_weight
+    # Cross-Validation mit sample_weight — nur auf Trainingsdaten (kein Leakage aus Test-Set)
     print("  Cross-Validation (5-fold) mit sample_weight...")
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_state)
     cv_scores = []
 
-    for fold, (train_idx, val_idx) in enumerate(cv.split(X, y)):
+    for fold, (train_idx, val_idx) in enumerate(cv.split(X_train, y_train)):
         fold_model = xgb.XGBClassifier(**params, early_stopping_rounds=early_stopping_rounds)
-        fold_class_weights = compute_sample_weight("balanced", y[train_idx])
-        fold_combined = sample_weights[train_idx] * fold_class_weights
+        fold_class_weights = compute_sample_weight("balanced", y_train[train_idx])
+        fold_combined = w_train[train_idx] * fold_class_weights
         fold_model.fit(
-            X[train_idx], y[train_idx],
+            X_train[train_idx], y_train[train_idx],
             sample_weight=fold_combined,
-            eval_set=[(X[val_idx], y[val_idx])],
+            eval_set=[(X_train[val_idx], y_train[val_idx])],
             verbose=False,
         )
-        fold_pred = fold_model.predict(X[val_idx])
-        fold_score = balanced_accuracy_score(y[val_idx], fold_pred)
+        fold_pred = fold_model.predict(X_train[val_idx])
+        fold_score = balanced_accuracy_score(y_train[val_idx], fold_pred)
         cv_scores.append(fold_score)
 
     cv_scores = np.array(cv_scores)

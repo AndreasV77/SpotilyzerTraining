@@ -17,8 +17,8 @@ Output:
 
 Checkpoint-System:
   - Alle CHECKPOINT_INTERVAL Tracks wird ein Zwischenspeicher geschrieben
-  - Bei Neustart wird der Checkpoint automatisch geladen (--resume, default: an)
-  - --force ignoriert vorhandenen Checkpoint und startet von vorne
+  - Bei Neustart wird der Checkpoint automatisch geladen (default: an)
+  - --no-resume / --force ignoriert vorhandenen Checkpoint und startet von vorne
   - --append lädt vorhandenes embeddings.npy + embeddings_meta.csv und verarbeitet nur neue Tracks
 
 GPU-Empfehlung: MERT-330M auf GPU: ~1-2s pro Track, auf CPU: ~20-30s pro Track
@@ -439,10 +439,11 @@ def main():
         help="Device fuer MERT (default: auto)"
     )
     parser.add_argument(
-        "--resume",
-        action="store_true",
+        "--no-resume",
+        action="store_false",
+        dest="resume",
         default=True,
-        help="Checkpoint laden und weiterarbeiten (default: an)"
+        help="Checkpoint ignorieren und von vorne beginnen (entspricht --force)"
     )
     parser.add_argument(
         "--force",
