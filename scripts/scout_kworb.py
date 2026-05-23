@@ -378,7 +378,7 @@ def get_isrc_by_artist_title(artist: str, title: str, cache: dict) -> Optional[s
 # ══════════════════════════════════════════════════════════════════════════════
 
 def deezer_get(endpoint: str, params: dict = None, delay: float = 0.3) -> Optional[dict]:
-    """Deezer API GET mit Retry bei 429 Rate Limit (max. 3 Versuche, Backoff 5/15/30s)."""
+    """Deezer API GET mit Retry bei 429/5xx und Netzwerkfehlern (max. 3 Versuche, Backoff 5/15/30s)."""
     url = f"{DEEZER_API_BASE}/{endpoint}"
     backoff_seconds = [5, 15, 30]
     for attempt, wait in enumerate(backoff_seconds + [None], start=1):
@@ -390,17 +390,26 @@ def deezer_get(endpoint: str, params: dict = None, delay: float = 0.3) -> Option
                 if "error" not in data:
                     return data
                 return None
-            if resp.status_code == 429:
+            if resp.status_code == 429 or 500 <= resp.status_code < 600:
                 if wait is None:
-                    logger.warning(f"Deezer Rate Limit nach {attempt - 1} Retries — aufgegeben: {endpoint}")
+                    logger.warning(
+                        f"Deezer {resp.status_code} nach {attempt - 1} Retries — aufgegeben: {endpoint}"
+                    )
                     return None
-                logger.warning(f"Deezer Rate Limit (Versuch {attempt}), warte {wait}s...")
+                logger.warning(
+                    f"Deezer {resp.status_code} (Versuch {attempt}), warte {wait}s..."
+                )
                 time.sleep(wait)
                 continue
             return None
         except requests.exceptions.RequestException as e:
-            logger.error(f"Deezer Fehler: {e}")
-            return None
+            if wait is None:
+                logger.error(
+                    f"Deezer Netzwerkfehler nach {attempt - 1} Retries — aufgegeben: {endpoint}: {e}"
+                )
+                return None
+            logger.warning(f"Deezer Netzwerkfehler (Versuch {attempt}), warte {wait}s: {e}")
+            time.sleep(wait)
     return None
 
 

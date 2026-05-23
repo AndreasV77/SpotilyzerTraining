@@ -203,7 +203,6 @@ def evaluate_model(
     label_encoder,
     X: np.ndarray,
     labels: np.ndarray,
-    sample_weights: np.ndarray = None,
     robustness_labels: np.ndarray = None,
     tau: float = None,
     theta_hit: float = None,
@@ -556,7 +555,6 @@ def main():
     metrics = evaluate_model(
         model, label_encoder,
         X, merged_df["label"].values,
-        sample_weights,
         robustness_labels=merged_df["robustness"].values,
         tau=args.tau,
         theta_hit=args.theta_hit,
