@@ -81,7 +81,7 @@ Copy-Item outputs/reports/training_report_MERTv1330M_*.json ..\Spotilyzer\models
 
 Improving the Hit/Mid/Flop classifier for Spotilyzer.
 
-### Current Model Status (as of 2026-03-20, source: evaluation_reports)
+### Current Model Status (as of 2026-05-29, source: evaluation_reports)
 
 All metrics on real holdout set (20%). Dataset: validated-only.
 
@@ -1175,7 +1175,7 @@ All values on real holdout set (20%). Source: `evaluation_report_*.json`
 - [x] recon_clusters.py + clusters_recon.yaml created
 - [x] Chart categorization: 22 validated, 2 suspicious (KR/TH), 7 excluded (AR/CL/PT/TR/AE/NZ/IN)
 - [x] scout_kworb.py: Kworb _weekly_totals, 6 markets, checkpoint system, miss cache, ISRC cache
-- [x] Model deployed: spotilyzer_model_MERTv1330M_main+spotify_charts+kworb_validated_20260319.joblib
+- [x] Model deployed: spotilyzer_model_MERTv1330M_main+spotify_charts+kworb_validated_20260529.joblib
 
 ### Long-term
 - [ ] YouTube views as third source
