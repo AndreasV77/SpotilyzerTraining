@@ -3,7 +3,7 @@
 Working document for the model training sub-project of Spotilyzer.
 
 **Created:** 2026-03-07
-**Last updated:** 2026-05-04 (Session 9: Embedding mismatch test performed — 63% label agreement, prob shift 0.10 → SIGNIFICANT. Retraining on 30s previews does not resolve the issue. Strategic decision on inference approach pending.)
+**Last updated:** 2026-05-29 (Session 10: Inference approach decided — N chunks × XGBoost → mean(probabilities). Archive cleanup. _20260331 = default, _20260319 = alternative.)
 
 **Important rule:** Always update CLAUDE.md after completed steps — never write based on ongoing or planned results. Always read metrics from reports, never estimate them.
 
@@ -87,7 +87,8 @@ All metrics on real holdout set (20%). Dataset: validated-only.
 
 | Model | Dataset | Holdout | BA | Hit R. | Flop R. | Status |
 |--------|---------|---------|-----|--------|---------|--------|
-| `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~22,722 val. | 4545 | **64.2%** | **82.5%** | 73.5% | **Active** |
+| `MERTv1330M_main+spotify_charts+kworb_validated_20260331` | ~22,722 val. | 4545 | 63.0% | **86.9%** | 67.5% | **Default** (depth=5) |
+| `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~22,722 val. | 4545 | **64.2%** | 82.5% | **73.5%** | **Alternative** (depth=4, BA-Optimum) |
 | (Session 5) `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~8960 val. | 1173 | 63.0% | 72.8% | 68.7% | Superseded |
 | `MERTv1330M_main+spotify_charts_validated_20260319` | 5660 val. | 1132 | 60.9% | 55.1% | 69.2% | Predecessor |
 | `MERTv195M_main+spotify_charts_validated_20260319` | 5660 val. | 1132 | 57.4% | 47.7% | 68.7% | Predecessor |
@@ -161,6 +162,17 @@ Extreme outliers: AndreasV — Alive in the Night (Euphoria Mix): flop→hit (sh
 - B) Acquire full tracks for training → technically accurate, but resource-intensive
 - C) Accept and document mismatch
 - D) Two scores: XGBoost with single-clip (hit potential), CLAP chunking separately (mood/genre)
+
+**Session 10 Decision (2026-05-29): Option D — simplified**
+
+Full track → N chunks à 30s → MERT(chunk_i) → XGBoost(chunk_i) → mean(prob_1..prob_N) → final score.
+
+Each chunk is evaluated as a standalone 30s clip — identical format to training (Deezer previews). Averaging on probability level, not embedding level. No mismatch.
+
+- **Now:** One value in the GUI (XGBoost hit potential, full-track)
+- **Later (Spotilyzer settings):** CLAP full-track as optional second score (mood/genre dimension)
+
+**Required change in Spotilyzer (open task):** `predictor.py` / `embedder.py` — instead of mean-pooling embeddings before XGBoost, run XGBoost on each chunk and average the output probabilities.
 
 **Open question training data:** ~200k songs from private library as training source? Likely not suitable (~80% Rock/Metal, mostly older titles → dataset bias).
 
@@ -1093,7 +1105,8 @@ All values on real holdout set (20%). Source: `evaluation_report_*.json`
 ## Open Tasks
 
 ### Short-term (next session)
-- [ ] **Strategic decision on inference approach:** Option A (single-clip energy-max), B (full tracks), C (accept mismatch) or D (two scores) — see Session 9 finding
+- [ ] **Spotilyzer inference change:** `predictor.py` / `embedder.py` — per-chunk XGBoost + mean(probabilities) instead of mean-pool embeddings → XGBoost once. See Session 10 decision.
+- [ ] **CLAP second score (Spotilyzer):** Optional setting in GUI — show CLAP full-track mood/genre score alongside hit potential
 - [ ] Check private library (~200k songs) for suitability as training data (estimated: not suitable, 80% Rock/Metal, mostly old)
 
 
