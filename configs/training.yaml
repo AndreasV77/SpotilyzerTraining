@@ -3,7 +3,7 @@
 # extract_embeddings.py liest ihn und schreibt in outputs/embeddings/<short-name>/
 # train_model.py liest ihn und sucht Embeddings im gleichen Unterverzeichnis.
 embedder:
-  model: "m-a-p/MERT-v1-95M"   # Optionen: "m-a-p/MERT-v1-95M" | "m-a-p/MERT-v1-330M"
+  model: "m-a-p/MERT-v1-330M"   # Optionen: "m-a-p/MERT-v1-95M" | "m-a-p/MERT-v1-330M"
 
 # Optionales Experiment-Label (erscheint im Modell-Dateinamen, leer lassen wenn nicht benötigt)
 # Beispiel: experiment_label: "balA"  → spotilyzer_model_MERTv1330M_balA_...joblib
@@ -49,10 +49,10 @@ models:
   MERT-v1-330M:
     params:
       n_estimators: 500
-      max_depth: 4             # 1024-dim: flachere Bäume gegen Overfitting
+      max_depth: 5             # Session 8: sweet spot depth=5 (Hit R. 86.9%)
       learning_rate: 0.05
       subsample: 0.8
-      colsample_bytree: 0.6    # 1024-dim: weniger Features pro Baum
+      colsample_bytree: 0.8    # depth=5 config from _20260331
       min_child_weight: 3
       gamma: 0.1
       reg_alpha: 0.5

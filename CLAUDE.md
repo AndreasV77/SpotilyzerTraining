@@ -3,7 +3,7 @@
 Working document for the model training sub-project of Spotilyzer.
 
 **Created:** 2026-03-07
-**Last updated:** 2026-05-29 (Session 10: Inference approach decided — N chunks × XGBoost → mean(probabilities). Archive cleanup. _20260331 = default, _20260319 = alternative.)
+**Last updated:** 2026-05-29 (Session 10: Inference approach decided. Fresh training run → _20260529 (BA 63.0%, Hit R. 86.9%). _20260529 = default, _20260319 = alternative.)
 
 **Important rule:** Always update CLAUDE.md after completed steps — never write based on ongoing or planned results. Always read metrics from reports, never estimate them.
 
@@ -87,7 +87,7 @@ All metrics on real holdout set (20%). Dataset: validated-only.
 
 | Model | Dataset | Holdout | BA | Hit R. | Flop R. | Status |
 |--------|---------|---------|-----|--------|---------|--------|
-| `MERTv1330M_main+spotify_charts+kworb_validated_20260331` | ~22,722 val. | 4545 | 63.0% | **86.9%** | 67.5% | **Default** (depth=5) |
+| `MERTv1330M_main+spotify_charts+kworb_validated_20260529` | ~22,722 val. | 4545 | 63.0% | **86.9%** | 67.5% | **Default** (depth=5, Session 10) |
 | `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~22,722 val. | 4545 | **64.2%** | 82.5% | **73.5%** | **Alternative** (depth=4, BA-Optimum) |
 | (Session 5) `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~8960 val. | 1173 | 63.0% | 72.8% | 68.7% | Superseded |
 | `MERTv1330M_main+spotify_charts_validated_20260319` | 5660 val. | 1132 | 60.9% | 55.1% | 69.2% | Predecessor |
