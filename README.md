@@ -8,14 +8,14 @@ This repository is the training sub-project of [Spotilyzer](https://github.com/A
 
 ## Current Model Status
 
-Holdout set: 1173 samples (20% from ~8960 validated). As of 2026-03-19.
+Holdout set: 4545 samples (20% from ~22,722 validated). As of 2026-03-19.
 
 | Model | BA | Hit R. | Flop R. |
 |--------|-----|--------|------|
-| `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | **63.0%** | **72.8%** | 68.7% |
+| `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | **64.2%** | **82.5%** | 73.5% |
 | `MERTv1330M_main+spotify_charts_validated_20260319` | 60.9% | 55.1% | 69.2% |
 
-**Goals:** Flop Recall ≥ 50% ✓ — Hit Recall ≥ 80% (72.8%, in progress) — BA ≥ 65% (63.0%, in progress)
+**Goals:** Flop Recall ≥ 50% ✓ — Hit Recall ≥ 80% ✓ (82.5%) — BA ≥ 65% (64.2%, in progress)
 
 ---
 
@@ -58,7 +58,7 @@ New-Item -ItemType Directory -Force -Path "G:\Dev\SpotilyzerData\datasets"
 ### Main Pipeline (Deezer Scouting)
 
 ```
-scout_deezer.py       →  metadata/tracks.jsonl  (Track IDs, Ranks, Cluster)
+scout_deezer.py       →  metadata/tracks.jsonl  (Track IDs, Ranks, Clusters)
 download_previews.py  →  previews/{shard}/*.mp3  (30s previews, MD5 sharding)
 enrich_lastfm.py      →  tracks.jsonl  (+ playcount, listeners, tags)
 compute_labels.py     →  tracks.jsonl  (+ label, robustness)

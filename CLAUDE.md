@@ -7,7 +7,7 @@ Working document for the model training sub-project of Spotilyzer.
 
 **Important rule:** Always update CLAUDE.md after completed steps — never write based on ongoing or planned results. Always read metrics from reports, never estimate them.
 
-**Note on AGENTS.md:** The file `AGENTS.md` in the repo root is an outdated duplicate of this CLAUDE.md (as of Session 5), created automatically for other AI assistants (OpenAI Codex etc.). It is not maintained and not tracked — this CLAUDE.md is the sole authoritative document.
+**Note on AGENTS.md:** The file `AGENTS.md` in the repo root is an outdated duplicate of this CLAUDE.md (as of Session 5), created automatically for other AI assistants (OpenAI Codex etc.). It is not maintained and not under version control — this CLAUDE.md is the sole authoritative document.
 
 ---
 
@@ -18,6 +18,22 @@ Working document for the model training sub-project of Spotilyzer.
 | **Purpose** | Data acquisition, labeling, model training | GUI, CLI, analysis pipeline |
 | **Local** | `G:\Dev\source\SpotilyzerTraining` | `G:\Dev\source\Spotilyzer` |
 | **GitHub** | `github.com/AndreasV77/SpotilyzerTraining` | `github.com/AndreasV77/Spotilyzer` |
+
+---
+
+## Translation Policy
+
+When translating between any language pair (e.g., DE↔EN, EN↔JP) anywhere in this
+repository — documentation (CLAUDE.md, README.md), code comments, docstrings,
+runtime strings, or UI locale files (`locale/*`) — technical correctness and
+clarity take priority over tonal fidelity.
+
+- Idiomatic, humorous, or culturally specific phrasings should be rendered as
+  neutral, precise statements in the target language. No clarification question
+  required.
+- Exception: passages of clear literary merit may be preserved verbatim. Append
+  the original to `poetry_collection.md` in the repo root (creating it if
+  needed) with source language and context, then translate neutrally in place.
 
 ---
 
@@ -95,9 +111,9 @@ No experiment beats the baseline in BA. Clear findings:
 - **expDim:** Hit Recall **90.8%** (+8.3pp!), but Flop −8.2pp, Mid −6pp, BA −1.9pp
 - BA ≥ 65% not yet reached — post-hoc adjustment as next strategy (Session 8)
 
-**Session 8 Finding: depth-Sweep + Post-hoc Adjustment (2026-03-31)**
+**Session 8 Finding: depth sweep + Post-hoc Adjustment (2026-03-31)**
 
-depth-Sweep (hypothesis: sweet spot at max_depth=5) — all on holdout n=4545:
+depth sweep (hypothesis: sweet spot at max_depth=5) — all on holdout n=4545:
 
 | Experiment | depth | colsample | BA | Hit R. | Mid R. | Flop R. |
 |-----------|-------|-----------|-----|--------|--------|---------|
@@ -106,9 +122,9 @@ depth-Sweep (hypothesis: sweet spot at max_depth=5) — all on holdout n=4545:
 | expD5b | 5 | 0.8 | 63.0% | 86.9% | 34.7% | 67.5% |
 | expDim (Ref.) | 6 | 0.8 | 62.3% | **90.8%** | 30.8% | 65.3% |
 
-Sweet spot hypothesis disproved: monotone trend — more depth/colsample → Hit Recall ↑, BA/Flop/Mid ↓. **depth=4, col=0.6 remains the BA optimum.** Hyperparameter space exhausted.
+Sweet spot hypothesis disproved: monotonic trend — more depth/colsample → Hit Recall ↑, BA/Flop/Mid ↓. **depth=4, col=0.6 remains the BA optimum.** Hyperparameter space exhausted.
 
-Post-hoc Logit Adjustment τ-Sweep on Baseline S6 (`_20260319`, n=4545):
+Post-hoc Logit Adjustment τ sweep on Baseline S6 (`_20260319`, n=4545):
 
 | τ | BA | Hit R. | Mid R. | Flop R. |
 |---|-----|--------|--------|---------|
@@ -142,13 +158,13 @@ Extreme outliers: AndreasV — Alive in the Night (Euphoria Mix): flop→hit (sh
 
 **Options (decision pending):**
 - A) Inference back to single-clip (energy-max) → consistent with training, no mismatch
-- B) Acquire full tracks for training → correct, but costly
+- B) Acquire full tracks for training → technically accurate, but resource-intensive
 - C) Accept and document mismatch
 - D) Two scores: XGBoost with single-clip (hit potential), CLAP chunking separately (mood/genre)
 
 **Open question training data:** ~200k songs from private library as training source? Likely not suitable (~80% Rock/Metal, mostly older titles → dataset bias).
 
-**Session 6 Finding:** kworb expanded to 12 markets (+ fr/au/ca with weight 0.85, it/se/nl with 0.70). Bug fix: HIT_THRESHOLDS only knew weights 1.0/0.85/0.70 — new 0.5 markets would never have been classified as Hit. 15,684 new tracks, 16,481 new previews. After dedup fix (35,530 → 26,004 embeddings): training dataset 22,722 validated, 14,991 Hits. Hit Recall: 72.8% → **82.5% (+9.7pp) — Primary target ≥80% reached**. Mid Recall dropped from ~46% to 36.6% (Mid class eroded by hit flood). BA 64.2% — 0.8pp remaining to target ≥65%.
+**Session 6 Finding:** kworb expanded to 12 markets (+ fr/au/ca with weight 0.85, it/se/nl with 0.70). Bug fix: HIT_THRESHOLDS only knew weights 1.0/0.85/0.70 — new 0.5 markets would never have been classified as Hit. 15,684 new tracks, 16,481 new previews. After dedup fix (35,530 → 26,004 embeddings): training dataset 22,722 validated, 14,991 Hits. Hit Recall: 72.8% → **82.5% (+9.7pp) — Primary target ≥80% reached**. Mid Recall dropped from ~46% to 36.6% (Mid class proportion reduced by Hit growth in the dataset). BA 64.2% — 0.8pp remaining to target ≥65%.
 
 **Session 5 Finding:** kworb module (Kworb.net _weekly_totals, 6 markets) delivered 2738 new tracks, 2497 Hits → Hit count tripled from 1216 to ~3700. Hit Recall 330M: 55.1% → 72.8% (+17.7pp). Trend stable: each +600 Hits → +17–18pp Hit Recall. Kworb track IDs were already all present in embeddings (popular tracks from Deezer scouting already captured). Confusion: 137 Hits classified as Mid — Mid class remains the largest source of errors.
 
@@ -156,7 +172,7 @@ Extreme outliers: AndreasV — Alive in the Night (Euphoria Mix): flop→hit (sh
 
 **Root cause analysis of earlier 26% Flop Recall:** 3900 "contested" tracks (Deezer/Last.fm contradiction) were all labeled "mid" → Mid inflated from 2114 to 6032 (3×). Fixed dataset via `--validated-only`.
 
-**Parameter Finding (95M):** Tuned vs. origparams → marginal difference (+0.6% BA). With larger dataset origparams could be more competitive — test rule paused for now, data volume is priority.
+**Parameter Finding (95M):** Tuned vs. origparams → marginal difference (+0.6% BA). With larger dataset origparams could be more competitive — experiment paused for now, data volume is priority.
 
 **Strategic Consequence:** Hit Recall 72.8% — 7.2pp remaining to target ≥80%. Next step: further data growth (more markets in Kworb, new Spotify Charts snapshots) or hyperparameter tuning.
 
@@ -497,8 +513,6 @@ python scripts/recon_clusters.py --dry-run
 | `suspicious` | Potentially manipulated — requires manual decision |
 | `excluded` | Not usable (outdated, user-curated, API bug) |
 
-**Known gap:** The `existing` charts (DE, US, UK, FR, BR, ES, JP, GLOBAL) have no `playlist_id` in `clusters_recon.yaml` — they are skipped by recon even with `--scope all`. They should be supplemented with playlist IDs for a complete analysis.
-
 **Spam detection thresholds** (from `recon_settings` in `clusters_recon.yaml`):
 - Single-artist dominance > 30% → warning
 - Artist diversity < 0.5 → warning
@@ -625,7 +639,7 @@ This workflow is a **prerequisite** for any new scouting run with expanded clust
 | SG | 1313620765 | 21K | Current |
 | MY | 1362515675 | 5K | Local acts |
 
-**MENA:**
+**MENA (Middle East / North Africa):**
 | Code | Playlist ID | Followers | Notes |
 |------|-------------|-----------|-------|
 | EG | 1362501615 | 111K | MENA market |
@@ -636,9 +650,9 @@ This workflow is a **prerequisite** for any new scouting run with expanded clust
 
 | Code | Problem | Sample Tracks |
 |------|---------|---------------|
-| KR | Classical orchestra at #2/#3 — bot manipulation? | Borodine, Saint-Saëns instead of K-Pop |
-| AR | BTS/Jimin only — K-Pop stan takeover | "Who", "Set Me Free", "Let Me Know" |
-| CL | OLD BTS tracks only (2014!) — definitely manipulated | "Danger", "24/7=Heaven" |
+| KR | Suspected bot manipulation — classical orchestra at #2/#3 is anomalous | Borodine, Saint-Saëns instead of K-Pop |
+| AR | BTS/Jimin only — dominated by K-Pop fan-base streaming patterns | "Who", "Set Me Free", "Let Me Know" |
+| CL | OLD BTS tracks only (2014!) — manipulation indicated by 2014-era tracks (non-organic chart behavior) | "Danger", "24/7=Heaven" |
 | TH | Strange mix — French Star Academy at #3? | Unusual genre mix |
 | PT | "Barulho Para Relaxar" = white noise tracks | Kim Wilde "You Came" (1988) |
 
@@ -655,7 +669,7 @@ This workflow is a **prerequisite** for any new scouting run with expanded clust
 
 #### Not searched (10) — status unclear
 
-CN, RU, VN, TW, HK, IL, GR, CZ, HU, RO — marked as problematic in earlier sessions, reason no longer traceable. Review again if needed.
+CN, RU, VN, TW, HK, IL, GR, CZ, HU, RO — marked as problematic in earlier sessions, reason no longer documented. Review again if needed.
 
 ### Planned Tier System
 
@@ -673,7 +687,7 @@ CN, RU, VN, TW, HK, IL, GR, CZ, HU, RO — marked as problematic in earlier sess
 - Track only in Tier-4 chart → `robustness * 0.5`
 - Implementation in `thresholds.yaml` or `clusters.yaml` (still to be decided)
 
-**Important:** "Weights are guesses in a suit." The tier system is a heuristic, not a scientifically validated metric. Transparency about uncertainty takes precedence over pseudo-precision.
+**Important:** Tier weights are heuristic estimates, not empirically validated. Treat them as best-effort assumptions.
 
 ### Spam Detection Criteria (in recon_clusters.py)
 
@@ -686,7 +700,7 @@ CN, RU, VN, TW, HK, IL, GR, CZ, HU, RO — marked as problematic in earlier sess
 
 ### Status of Deezer Chart Expansion (2026-03-19)
 
-**Decision:** Deezer chart expansion is **not further prioritized**. Experience shows that additional Deezer country charts deliver predominantly Mids/Flops, few Hits. Instead: `kworb_deezer` module.
+**Decision:** Deezer chart expansion is **deprioritized**. Experience shows that additional Deezer country charts deliver predominantly Mids/Flops, few Hits. Instead: `kworb_deezer` module.
 
 Remaining open points (only if needed):
 1. `clusters_recon.yaml`: Add playlist IDs for DE/US/UK/FR/BR/ES/JP/GLOBAL (→ recon currently skips them)
@@ -840,7 +854,7 @@ Shared Pipeline (from Embeddings):
 
 **Unused genres (after analysis):**
 - Genre 106 (Electro/Techno): No pop connection, would create a 4th electronic cluster
-- Genre 152 (Rock): Deezer Radio is a German rock mix, overlap with existing clusters
+- Genre 152 (Rock): Deezer Radio is German-language rock programming, overlap with existing clusters
 - Genre 464 (Heavy Metal): Deezer Radio = Within Temptation/Helloween, overlap with gothic/power_symphonic
 - Genre 144 (Reggae): Too niche, ranks mostly 300–420K (almost all Mid)
 - `hiphop_alternative`: No focused Deezer Radio available
@@ -1107,7 +1121,7 @@ All values on real holdout set (20%). Source: `evaluation_report_*.json`
 
 **Result:** 2738 tracks, 2497 Hits, all embeddings already present. Training delivered BA=63.0%, Hit R.=72.8%.
 
-**Open todos (nice-to-have):**
+**Open to-dos (nice-to-have):**
 - [ ] `enrich_isrc.py` — background script: fill ISRC for `isrc: null` tracks via MusicBrainz (currently using `--skip-mb`)
 - [ ] `configs/datasets/kworb.yaml` — market list, tier weights, hit thresholds (currently hardcoded in scout_kworb.py)
 
@@ -1115,14 +1129,14 @@ All values on real holdout set (20%). Source: `evaluation_report_*.json`
 - [x] ~~Run `recon_clusters.py`~~ ✅ (2026-03-18)
 - [x] ~~AR, CL, PT~~ ✅ → excluded (manipulated/spam)
 - [ ] KR, TH: targeted recon run (`--charts KR TH`) → then decide (after kworb_deezer)
-- [ ] `clusters_recon.yaml`: Add `playlist_id` for DE/US/UK/FR/BR/ES/JP/GLOBAL
+
 - [ ] Finalize tier assignment based on overlap/rank data
 
 ### Medium-term
 - [x] ~~More Hit samples: target ≥2000 validated Hits~~ ✅ (~3700 Hits, Session 5)
 - [ ] Evaluate genre-balanced sampling
 - [ ] Test LightGBM as alternative
-- [ ] `configs/thresholds.yaml` — calibrate Last.fm thresholds (or made obsolete via module system)
+- [ ] `configs/thresholds.yaml` — calibrate Last.fm thresholds (or rendered obsolete by the module system)
 - [ ] Migrate existing CSV data in `scout_results/` → JSONL (one-time, optional)
 
 ### Done
