@@ -1,87 +1,87 @@
 # CLAUDE.md — SpotilyzerTraining
 
-Arbeitsdokument für das Modell-Training-Subprojekt von Spotilyzer.
+Working document for the model training sub-project of Spotilyzer.
 
-**Erstellt:** 2026-03-07
-**Zuletzt aktualisiert:** 2026-05-04 (Session 9: Embedding-Mismatch-Test durchgeführt — 63% Label-Übereinstimmung, Prob-Shift 0.10 → SIGNIFIKANT. Retrain auf 30s-Previews löst das Problem nicht. Strategische Entscheidung über Inferenz-Ansatz steht aus.)
+**Created:** 2026-03-07
+**Last updated:** 2026-05-04 (Session 9: Embedding mismatch test performed — 63% label agreement, prob shift 0.10 → SIGNIFICANT. Retraining on 30s previews does not resolve the issue. Strategic decision on inference approach pending.)
 
-**Wichtige Regel:** CLAUDE.md immer nach abgeschlossenen Schritten aktualisieren — nie auf Basis von laufenden oder geplanten Ergebnissen schreiben. Metriken immer aus Reports lesen, nicht schätzen.
+**Important rule:** Always update CLAUDE.md after completed steps — never write based on ongoing or planned results. Always read metrics from reports, never estimate them.
 
-**Hinweis zu AGENTS.md:** Die Datei `AGENTS.md` im Repo-Root ist ein veraltetes Duplikat dieser CLAUDE.md (Stand Session 5), das automatisch für andere KI-Assistenten (OpenAI Codex etc.) angelegt wurde. Sie wird nicht gepflegt und nicht getrackt — maßgeblich ist ausschließlich diese CLAUDE.md.
+**Note on AGENTS.md:** The file `AGENTS.md` in the repo root is an outdated duplicate of this CLAUDE.md (as of Session 5), created automatically for other AI assistants (OpenAI Codex etc.). It is not maintained and not tracked — this CLAUDE.md is the sole authoritative document.
 
 ---
 
-## Repository-Informationen
+## Repository Information
 
-| | Dieses Projekt | Hauptprojekt |
+| | This Project | Main Project |
 |---|----------------|---------------------|
-| **Zweck** | Datenakquise, Labeling, Modell-Training | GUI, CLI, Analyse-Pipeline |
-| **Lokal** | `G:\Dev\source\SpotilyzerTraining` | `G:\Dev\source\Spotilyzer` |
+| **Purpose** | Data acquisition, labeling, model training | GUI, CLI, analysis pipeline |
+| **Local** | `G:\Dev\source\SpotilyzerTraining` | `G:\Dev\source\Spotilyzer` |
 | **GitHub** | `github.com/AndreasV77/SpotilyzerTraining` | `github.com/AndreasV77/Spotilyzer` |
 
 ---
 
-## WICHTIG: Beziehung zum Hauptprojekt
+## IMPORTANT: Relationship to Main Project
 
-Dieses Repository ist das **Training-Subprojekt** für Spotilyzer. Es enthält alles, was mit Datenakquise, Labeling und Modell-Training zu tun hat.
+This repository is the **training sub-project** for Spotilyzer. It contains everything related to data acquisition, labeling, and model training.
 
-### Was gehört wohin?
+### What Goes Where?
 
-| Aufgabe | Repository |
+| Task | Repository |
 |---------|------------|
-| Deezer-Scouting, Preview-Download | **SpotilyzerTraining** (hier) |
-| Last.fm-Enrichment | **SpotilyzerTraining** (hier) |
-| Label-Berechnung, Sample-Gewichtung | **SpotilyzerTraining** (hier) |
-| MERT-Embedding-Extraktion | **SpotilyzerTraining** (hier) |
-| XGBoost-Training | **SpotilyzerTraining** (hier) |
-| GUI, CLI, Analyse-Pipeline | **Spotilyzer** (Hauptprojekt) |
-| Fertiges Modell (.joblib) | Wird von hier → Spotilyzer kopiert |
+| Deezer scouting, preview download | **SpotilyzerTraining** (here) |
+| Last.fm enrichment | **SpotilyzerTraining** (here) |
+| Label calculation, sample weighting | **SpotilyzerTraining** (here) |
+| MERT embedding extraction | **SpotilyzerTraining** (here) |
+| XGBoost training | **SpotilyzerTraining** (here) |
+| GUI, CLI, analysis pipeline | **Spotilyzer** (main project) |
+| Finished model (.joblib) | Copied from here → Spotilyzer |
 
-### Interface zum Hauptprojekt
+### Interface to Main Project
 
-**Output dieses Projekts:**
-- `outputs/models/spotilyzer_model_{embedder}_{date}.joblib` — z.B. `spotilyzer_model_MERTv1330M_20260317.joblib`
-- `outputs/reports/training_report_{embedder}_{date}.json` — Trainings-Metadaten
+**Output of this project:**
+- `outputs/models/spotilyzer_model_{embedder}_{date}.joblib` — e.g. `spotilyzer_model_MERTv1330M_20260317.joblib`
+- `outputs/reports/training_report_{embedder}_{date}.json` — training metadata
 
 **Deployment:**
 ```powershell
-# Nach erfolgreichem Training (Dateinamen anpassen!):
+# After successful training (adjust filenames!):
 Copy-Item outputs/models/spotilyzer_model_MERTv1330M_*.joblib ..\Spotilyzer\models\
 Copy-Item outputs/reports/training_report_MERTv1330M_*.json ..\Spotilyzer\models\
 ```
 
-### Bei GUI/CLI-bezogenen Fragen
+### For GUI/CLI-Related Questions
 
-→ Siehe `G:\Dev\source\Spotilyzer\CLAUDE.md`
+→ See `G:\Dev\source\Spotilyzer\CLAUDE.md`
 
-**NICHT in diesem Repo:**
-- Analyse-Pipeline ändern
-- GUI-Features entwickeln
-- Export-Formate anpassen
+**NOT in this repo:**
+- Changing analysis pipeline
+- Developing GUI features
+- Adjusting export formats
 
 ---
 
-## Projektziel
+## Project Goal
 
-Verbesserung des Hit/Mid/Flop-Klassifikators für Spotilyzer.
+Improving the Hit/Mid/Flop classifier for Spotilyzer.
 
-### Aktueller Modellstand (Stand 2026-03-20, Quelle: evaluation_reports)
+### Current Model Status (as of 2026-03-20, source: evaluation_reports)
 
-Alle Metriken auf echtem Holdout-Set (20%). Datensatz: validated-only.
+All metrics on real holdout set (20%). Dataset: validated-only.
 
-| Modell | Datensatz | Holdout | BA | Hit R. | Flop R. | Status |
-|--------|-----------|---------|-----|--------|---------|--------|
-| `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~22.722 val. | 4545 | **64.2%** | **82.5%** | 73.5% | **Aktiv** |
-| (Session 5) `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~8960 val. | 1173 | 63.0% | 72.8% | 68.7% | Überschrieben |
-| `MERTv1330M_main+spotify_charts_validated_20260319` | 5660 val. | 1132 | 60.9% | 55.1% | 69.2% | Vorgänger |
-| `MERTv195M_main+spotify_charts_validated_20260319` | 5660 val. | 1132 | 57.4% | 47.7% | 68.7% | Vorgänger |
-| `MERTv1330M_validated_20260318` | 5262 val. | 967 | 57.5% | 37.5% | 71.1% | Vorgänger |
-| `MERTv195M_validated_20260318` | 5262 val. | 967 | 53.2% | 27.3% | 68.9% | Vorgänger |
-| `MERTv195M_origparams_validated_20260318` | 5262 val. | 967 | 52.6% | 24.8% | 69.2% | Referenz |
+| Model | Dataset | Holdout | BA | Hit R. | Flop R. | Status |
+|--------|---------|---------|-----|--------|---------|--------|
+| `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~22,722 val. | 4545 | **64.2%** | **82.5%** | 73.5% | **Active** |
+| (Session 5) `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~8960 val. | 1173 | 63.0% | 72.8% | 68.7% | Superseded |
+| `MERTv1330M_main+spotify_charts_validated_20260319` | 5660 val. | 1132 | 60.9% | 55.1% | 69.2% | Predecessor |
+| `MERTv195M_main+spotify_charts_validated_20260319` | 5660 val. | 1132 | 57.4% | 47.7% | 68.7% | Predecessor |
+| `MERTv1330M_validated_20260318` | 5262 val. | 967 | 57.5% | 37.5% | 71.1% | Predecessor |
+| `MERTv195M_validated_20260318` | 5262 val. | 967 | 53.2% | 27.3% | 68.9% | Predecessor |
+| `MERTv195M_origparams_validated_20260318` | 5262 val. | 967 | 52.6% | 24.8% | 69.2% | Reference |
 
-**Session-7-Befund: Balancing-Experimente (2026-03-20)** — 4 Experimente auf Holdout-Set S6 (n=4545, außer expA/C mit reduziertem Holdout):
+**Session 7 Finding: Balancing Experiments (2026-03-20)** — 4 experiments on holdout set S6 (n=4545, except expA/C with reduced holdout):
 
-| Experiment | Konfiguration | BA | Hit R. | Mid R. | Flop R. |
+| Experiment | Configuration | BA | Hit R. | Mid R. | Flop R. |
 |-----------|--------------|-----|--------|--------|---------|
 | Baseline S6 | Standard (max_depth=4, col=0.6) | **64.2%** | **82.5%** | 36.6% | **73.5%** |
 | expA | max_hits=6000 | 62.8% | 73.1% | 41.2% | 74.2% |
@@ -89,15 +89,15 @@ Alle Metriken auf echtem Holdout-Set (20%). Datensatz: validated-only.
 | expC | max_hits=6000 + boost | 62.1% | 58.5% | 57.1% | 70.8% |
 | expDim | max_depth=6, colsample=0.8 | 62.3% | **90.8%** | 30.8% | 65.3% |
 
-Kein Experiment schlägt die Baseline in BA. Klare Befunde:
-- **Undersampling (expA/C):** Hit Recall −9–24pp, Mid Recall +5–21pp — ungünstiger Trade
-- **Boost (expB):** BA stabil (−0.2pp), Mid Recall +14pp, aber Hit Recall −14pp
-- **expDim:** Hit Recall **90.8%** (+8.3pp!), aber Flop −8.2pp, Mid −6pp, BA −1.9pp
-- BA≥65% noch nicht erreicht — Post-hoc Adjustment als nächste Strategie (Session 8)
+No experiment beats the baseline in BA. Clear findings:
+- **Undersampling (expA/C):** Hit Recall −9–24pp, Mid Recall +5–21pp — unfavorable trade
+- **Boost (expB):** BA stable (−0.2pp), Mid Recall +14pp, but Hit Recall −14pp
+- **expDim:** Hit Recall **90.8%** (+8.3pp!), but Flop −8.2pp, Mid −6pp, BA −1.9pp
+- BA ≥ 65% not yet reached — post-hoc adjustment as next strategy (Session 8)
 
-**Session-8-Befund: depth-Sweep + Post-hoc Adjustment (2026-03-31)**
+**Session 8 Finding: depth-Sweep + Post-hoc Adjustment (2026-03-31)**
 
-depth-Sweep (Hypothese: sweet spot bei max_depth=5) — alle auf Holdout n=4545:
+depth-Sweep (hypothesis: sweet spot at max_depth=5) — all on holdout n=4545:
 
 | Experiment | depth | colsample | BA | Hit R. | Mid R. | Flop R. |
 |-----------|-------|-----------|-----|--------|--------|---------|
@@ -106,9 +106,9 @@ depth-Sweep (Hypothese: sweet spot bei max_depth=5) — alle auf Holdout n=4545:
 | expD5b | 5 | 0.8 | 63.0% | 86.9% | 34.7% | 67.5% |
 | expDim (Ref.) | 6 | 0.8 | 62.3% | **90.8%** | 30.8% | 65.3% |
 
-Sweet-spot-Hypothese widerlegt: monotoner Trend — mehr depth/colsample → Hit Recall ↑, BA/Flop/Mid ↓. **depth=4, col=0.6 bleibt das BA-Optimum.** Hyperparameter-Raum ausgereizt.
+Sweet spot hypothesis disproved: monotone trend — more depth/colsample → Hit Recall ↑, BA/Flop/Mid ↓. **depth=4, col=0.6 remains the BA optimum.** Hyperparameter space exhausted.
 
-Post-hoc Logit-Adjustment τ-Sweep auf Baseline S6 (`_20260319`, n=4545):
+Post-hoc Logit Adjustment τ-Sweep on Baseline S6 (`_20260319`, n=4545):
 
 | τ | BA | Hit R. | Mid R. | Flop R. |
 |---|-----|--------|--------|---------|
@@ -116,166 +116,166 @@ Post-hoc Logit-Adjustment τ-Sweep auf Baseline S6 (`_20260319`, n=4545):
 | **0.25** | **65.3%** | 73.2% | 42.9% | 79.8% |
 | 0.5 | 64.8% | 61.2% | 48.5% | 84.6% |
 
-Combined best (τ=0.25, θ_hit=0.45, θ_flop=0.35): BA=**65.7%**, Hit=76.4%. BA-Ziel erreichbar, aber BA≥65% und Hit Recall≥80% gleichzeitig nicht darstellbar via Post-hoc Adjustment.
+Combined best (τ=0.25, θ_hit=0.45, θ_flop=0.35): BA=**65.7%**, Hit=76.4%. BA target achievable, but BA ≥ 65% and Hit Recall ≥ 80% simultaneously not achievable via post-hoc adjustment.
 
-Leakage-Befund: 88.4% der Holdout-Tracks von Künstlern, die auch im Training vorkommen → alle Metriken optimistisch verzerrt. Für unbiasierte Evaluation: GroupKFold mit artist_id erforderlich.
+Leakage finding: 88.4% of holdout tracks from artists also present in training → all metrics optimistically biased. For unbiased evaluation: GroupKFold with artist_id required.
 
-**Session-9-Befund: Embedding-Mismatch-Test (2026-05-04)**
+**Session 9 Finding: Embedding Mismatch Test (2026-05-04)**
 
-Hintergrund: Das Hauptprojekt (Spotilyzer) wurde auf Full-Track-Analyse umgestellt — MERT verarbeitet jetzt den ganzen Track (30s-Chunks → Mean-Pool) statt wie bisher die ersten 30s. Test mit 19 Full-Length-Tracks (`scripts/test_embedding_mismatch.py`):
+Background: The main project (Spotilyzer) was switched to full-track analysis — MERT now processes the entire track (30s chunks → mean-pool) instead of the first 30s as before. Test with 19 full-length tracks (`scripts/test_embedding_mismatch.py`):
 
-| Metrik | Ergebnis |
-|--------|----------|
-| Label-Übereinstimmung (alt vs. neu) | 12/19 = **63%** |
-| Mittlerer Prob-Shift | **0.1036** |
-| Max Prob-Shift | 0.3557 |
-| Bewertung | **SIGNIFIKANT** |
+| Metric | Result |
+|--------|--------|
+| Label agreement (old vs. new) | 12/19 = **63%** |
+| Mean prob shift | **0.1036** |
+| Max prob shift | 0.3557 |
+| Assessment | **SIGNIFICANT** |
 
-Extreme Ausreißer: AndreasV — Alive in the Night (Euphoria Mix): flop→hit (Shift 0.53), Become (Tri-Funk): flop→mid (Shift 0.40). Songs mit langen instrumentalen Passagen (Sloe Gin, Nothing Else Matters, Hey Joe) kippen zum Flop — spätere Chunks ruhiger/instrumentaler als Deezer-Preview.
+Extreme outliers: AndreasV — Alive in the Night (Euphoria Mix): flop→hit (shift 0.53), Become (Tri-Funk): flop→mid (shift 0.40). Songs with long instrumental passages (Sloe Gin, Nothing Else Matters, Hey Joe) flip to Flop — later chunks are calmer/more instrumental than the Deezer preview.
 
-**Kernproblem:** Retrain auf 30s-Previews würde nichts ändern — 1 Chunk à 30s → Mean von 1 Embedding = identisches Ergebnis. Der Mismatch ist strukturell:
+**Core problem:** Retraining on 30s previews would not change anything — 1 chunk at 30s → mean of 1 embedding = identical result. The mismatch is structural:
 
-| | Training | Inferenz (Hauptprojekt neu) |
+| | Training | Inference (main project new) |
 |--|--|--|
-| Input | Deezer 30s-Preview (kuratiert) | Voller Track, alle 30s-Chunks gemittelt |
-| Embedding | 1 Clip → 1 Embedding | N Chunks → Mean-Pool |
+| Input | Deezer 30s preview (curated) | Full track, all 30s chunks averaged |
+| Embedding | 1 clip → 1 embedding | N chunks → mean-pool |
 
-**Optionen (Entscheidung ausstehend):**
-- A) Inferenz zurück auf Single-Clip (Energie-Max) → konsistent mit Training, kein Mismatch
-- B) Volltracks für Training beschaffen → korrekt, aber aufwändig
-- C) Mismatch akzeptieren und dokumentieren
-- D) Zwei Scores: XGBoost mit Single-Clip (Hit-Potential), CLAP-Chunking separat (Mood/Genre)
+**Options (decision pending):**
+- A) Inference back to single-clip (energy-max) → consistent with training, no mismatch
+- B) Acquire full tracks for training → correct, but costly
+- C) Accept and document mismatch
+- D) Two scores: XGBoost with single-clip (hit potential), CLAP chunking separately (mood/genre)
 
-**Offene Frage Trainingsdaten:** ~200k Songs der privaten Bibliothek als Trainingsquelle? Vermutlich wenig geeignet (~80% Rock/Metal, überwiegend ältere Titel → Datensatz-Bias).
+**Open question training data:** ~200k songs from private library as training source? Likely not suitable (~80% Rock/Metal, mostly older titles → dataset bias).
 
-**Session-6-Befund:** kworb auf 12 Märkte erweitert (+ fr/au/ca mit Weight 0.85, it/se/nl mit 0.70). Bug fix: HIT_THRESHOLDS kannte nur Weights 1.0/0.85/0.70 — neue 0.5-Märkte wären nie als Hit klassifiziert worden. 15.684 neue Tracks, 16.481 neue Previews. Nach Dedup-Fix (35.530 → 26.004 Embeddings): Trainingsdatensatz 22.722 validated, 14.991 Hits. Hit Recall: 72.8% → **82.5% (+9.7pp) — Primärziel ≥80% erreicht**. Mid Recall sank von ~46% auf 36.6% (Mid-Klasse durch Hit-Flut zerrieben). BA 64.2% — noch 0.8pp bis Ziel ≥65%.
+**Session 6 Finding:** kworb expanded to 12 markets (+ fr/au/ca with weight 0.85, it/se/nl with 0.70). Bug fix: HIT_THRESHOLDS only knew weights 1.0/0.85/0.70 — new 0.5 markets would never have been classified as Hit. 15,684 new tracks, 16,481 new previews. After dedup fix (35,530 → 26,004 embeddings): training dataset 22,722 validated, 14,991 Hits. Hit Recall: 72.8% → **82.5% (+9.7pp) — Primary target ≥80% reached**. Mid Recall dropped from ~46% to 36.6% (Mid class eroded by hit flood). BA 64.2% — 0.8pp remaining to target ≥65%.
 
-**Session-5-Befund:** kworb-Modul (Kworb.net _weekly_totals, 6 Märkte) lieferte 2738 neue Tracks, 2497 Hits → Hit-Count von 1216 auf ~3700 verdreifacht. Hit Recall 330M: 55.1% → 72.8% (+17.7pp). Trend stabil: je +600 Hits → je +17–18pp Hit Recall. Kworb-Track-IDs waren bereits alle in Embeddings vorhanden (populäre Tracks vom Deezer-Scouting bereits erfasst). Confusion: 137 Hits als Mid klassifiziert — Mid-Klasse bleibt die größte Fehlerquelle.
+**Session 5 Finding:** kworb module (Kworb.net _weekly_totals, 6 markets) delivered 2738 new tracks, 2497 Hits → Hit count tripled from 1216 to ~3700. Hit Recall 330M: 55.1% → 72.8% (+17.7pp). Trend stable: each +600 Hits → +17–18pp Hit Recall. Kworb track IDs were already all present in embeddings (popular tracks from Deezer scouting already captured). Confusion: 137 Hits classified as Mid — Mid class remains the largest source of errors.
 
-**Session-4-Befund:** spotify_charts-Modul lieferte 960 neue Tracks, 579 Hits → Hit-Count von 637 auf 1216 fast verdoppelt. Hit Recall 330M: 37.5% → 55.1% (+17.6pp). Hypothese bestätigt: reines Datenproblem, kein Hyperparameter-Problem.
+**Session 4 Finding:** spotify_charts module delivered 960 new tracks, 579 Hits → Hit count almost doubled from 637 to 1216. Hit Recall 330M: 37.5% → 55.1% (+17.6pp). Hypothesis confirmed: pure data problem, not a hyperparameter problem.
 
-**Ursachenanalyse der früheren 26% Flop Recall:** 3900 "contested" Tracks (Deezer/Last.fm Widerspruch) wurden alle als "mid" gelabelt → Mid von 2114 auf 6032 aufgebläht (3×). Behobener Datensatz via `--validated-only`.
+**Root cause analysis of earlier 26% Flop Recall:** 3900 "contested" tracks (Deezer/Last.fm contradiction) were all labeled "mid" → Mid inflated from 2114 to 6032 (3×). Fixed dataset via `--validated-only`.
 
-**Parameter-Befund (95M):** Tuned vs. origparams → marginaler Unterschied (+0.6% BA). Bei größerem Datensatz könnte origparams kompetitiver sein — Testregel vorerst ausgesetzt, da Datenmenge Priorität hat.
+**Parameter Finding (95M):** Tuned vs. origparams → marginal difference (+0.6% BA). With larger dataset origparams could be more competitive — test rule paused for now, data volume is priority.
 
-**Strategische Konsequenz:** Hit Recall 72.8% — noch 7.2pp bis Ziel ≥80%. Nächster Schritt: weiteres Datenwachstum (mehr Märkte in Kworb, neue Spotify-Charts-Snapshots) oder Hyperparameter-Tuning.
+**Strategic Consequence:** Hit Recall 72.8% — 7.2pp remaining to target ≥80%. Next step: further data growth (more markets in Kworb, new Spotify Charts snapshots) or hyperparameter tuning.
 
-### Aktueller Datensatz-Stand (2026-03-19, Session 6)
+### Current Dataset Status (2026-03-19, Session 6)
 
-Kombinierter Datensatz: Haupt-JSONL (Deezer-Scouting) + spotify_charts-Modul + kworb-Modul
+Combined dataset: Main JSONL (Deezer scouting) + spotify_charts module + kworb module
 
-| Quelle | Tracks | Validated | Hits (val.) | Embeddings |
+| Source | Tracks | Validated | Hits (val.) | Embeddings |
 |--------|--------|-----------|-------------|------------|
-| main (Deezer) | 9.661 | 5.262 | 637 | 8.794 |
+| main (Deezer) | 9,661 | 5,262 | 637 | 8,794 |
 | spotify_charts | 960 | 960 | 579 | 960 |
-| kworb | ~18.900 | ~18.900 | ~14.000 | 26.004 (dedup, inkl. main-Overlap) |
-| **Gesamt (dedup)** | **~28.400** | **~22.722** | **~14.991** | **26.004** |
+| kworb | ~18,900 | ~18,900 | ~14,000 | 26,004 (dedup, incl. main overlap) |
+| **Total (dedup)** | **~28,400** | **~22,722** | **~14,991** | **26,004** |
 
-**Holdout-Set (Session 6):** 4545 Samples (415 Flops, 2999 Hits, 1131 Mids) — 20% aus ~22.722 validated
+**Holdout Set (Session 6):** 4545 samples (415 Flops, 2999 Hits, 1131 Mids) — 20% from ~22,722 validated
 
-**Spotify Charts abgedeckt (2026-03-19):**
+**Spotify Charts covered (2026-03-19):**
 - `regional-{us/gb/de/jp/br/mx/global}-weekly-2026-03-12.csv`
-- Pfad: `G:/Dev/SpotilyzerData/spotify/2026-03-19/`
-- Match-Rate: 978/994 (98.4%) via Deezer-Suche; 16 Misses (vermutlich JP-Kanji)
+- Path: `G:/Dev/SpotilyzerData/spotify/2026-03-19/`
+- Match rate: 978/994 (98.4%) via Deezer search; 16 misses (likely JP Kanji)
 
-**Kworb abgedeckt (2026-03-19, Session 6):**
-- Märkte: us, gb, de, jp, br, mx (Weight 1.0/0.85) + fr, au, ca (0.85) + it, se, nl (0.70) — `_weekly_totals` (kumulierte Historie seit 2013)
-- Filter: Total ≥ 20.000.000 Streams → 18.928 Unique Tracks nach Dedup
-- Match-Rate: 16.524/16.841 (98.1%) via Deezer-Suche; 317 Misses
-- ISRC: `--skip-mb` (alle via Artist+Title-Suche); `enrich_isrc.py` für spätere ISRC-Anreicherung geplant
-- Labels: 12.998 Hits, 3.526 Mids (kworb-Datensatz allein)
+**Kworb covered (2026-03-19, Session 6):**
+- Markets: us, gb, de, jp, br, mx (weight 1.0/0.85) + fr, au, ca (0.85) + it, se, nl (0.70) — `_weekly_totals` (cumulative history since 2013)
+- Filter: Total ≥ 20,000,000 streams → 18,928 unique tracks after dedup
+- Match rate: 16,524/16,841 (98.1%) via Deezer search; 317 misses
+- ISRC: `--skip-mb` (all via artist+title search); `enrich_isrc.py` planned for later ISRC enrichment
+- Labels: 12,998 Hits, 3,526 Mids (kworb dataset alone)
 
-**Nächster Schritt:** BA ≥65% (noch 0.8pp) — Optionen: Mid-Klasse stärken (Hyperparameter-Tuning, compute_labels.py Bug 3), neue Chart-Quellen (ODJC, aCharts).
+**Next step:** BA ≥ 65% (0.8pp remaining) — options: strengthen Mid class (hyperparameter tuning, compute_labels.py Bug 3), new chart sources (ODJC, aCharts).
 
 ---
 
-## Datenstruktur (SpotilyzerData)
+## Data Structure (SpotilyzerData)
 
-**Speicherort:** `G:/Dev/SpotilyzerData` (außerhalb des Repos, zu groß für Git)
+**Location:** `G:/Dev/SpotilyzerData` (outside repo, too large for Git)
 
 ```
 G:/Dev/SpotilyzerData/
-├── previews/                      # Audio-Dateien (geteilt über alle Datensätze)
-│   ├── 00/ ... ff/                # MD5-Hash-Sharding (256 Ordner)
-│   │   └── {track_id}.mp3         # Deezer-ID als Dateiname
+├── previews/                      # Audio files (shared across all datasets)
+│   ├── 00/ ... ff/                # MD5 hash sharding (256 folders)
+│   │   └── {track_id}.mp3         # Deezer ID as filename
 │   └── ...
 │
 ├── metadata/
-│   └── tracks.jsonl               # Haupt-Datensatz (Deezer-Scouting)
+│   └── tracks.jsonl               # Main dataset (Deezer scouting)
 │
-├── datasets/                      # Modul-Datensätze (separate JSONL je Modul)
+├── datasets/                      # Module datasets (separate JSONL per module)
 │   ├── spotify_charts/
 │   │   └── tracks.jsonl           # Spotify Top 200 Charts
 │   └── kworb/
-│       ├── tracks.jsonl           # Kworb _weekly_totals (kumulierte Historie)
-│       ├── isrc_cache.json        # MusicBrainz ISRC-Cache
-│       └── deezer_miss_cache.json # Tracks ohne Deezer-Match (Resume-Skip)
+│       ├── tracks.jsonl           # Kworb _weekly_totals (cumulative history)
+│       ├── isrc_cache.json        # MusicBrainz ISRC cache
+│       └── deezer_miss_cache.json # Tracks without Deezer match (resume skip)
 │
-├── spotify/                       # Rohe Spotify Chart CSVs (manuell gezogen)
+├── spotify/                       # Raw Spotify Charts CSVs (manually downloaded)
 │   └── {YYYY-MM-DD}/
 │       └── regional-{country}-weekly-{date}.csv
 │
-└── playlists/                     # Bei Bedarf generierte M3U8-Playlists
+└── playlists/                     # M3U8 playlists generated on demand
     └── *.m3u8
 ```
 
-### Preview-Dateien
+### Preview Files
 
-**Dateiname:** `{deezer_track_id}.mp3` (z.B. `3770028292.mp3`)
+**Filename:** `{deezer_track_id}.mp3` (e.g. `3770028292.mp3`)
 
-**WICHTIG:** Cluster-Zuordnung ist NICHT im Dateinamen! Ein Track kann mehreren Clustern angehören (z.B. ein Metal-Track der auch in den Charts ist). Cluster-Info nur in `tracks.jsonl`.
+**IMPORTANT:** Cluster assignment is NOT in the filename! A track can belong to multiple clusters (e.g. a metal track that is also in the charts). Cluster info only in `tracks.jsonl`.
 
-**Ordner-Sharding:** MD5-Hash der Track-ID (erste 2 Zeichen)
+**Folder sharding:** MD5 hash of track ID (first 2 characters)
 
 ```python
 import hashlib
 
 def get_shard_dir(track_id: int) -> str:
-    """Berechnet Shard-Verzeichnis aus Track-ID."""
+    """Calculate shard directory from track ID."""
     h = hashlib.md5(str(track_id).encode()).hexdigest()
     return h[:2]
 
 def get_preview_path(track_id: int, base_path: str = "G:/Dev/SpotilyzerData/previews") -> str:
-    """Vollständiger Pfad zu einer Preview-Datei."""
+    """Full path to a preview file."""
     shard = get_shard_dir(track_id)
     return f"{base_path}/{shard}/{track_id}.mp3"
 
-# Beispiele:
+# Examples:
 # 3770028292 → previews/a7/3770028292.mp3
 # 1234567    → previews/e1/1234567.mp3
 ```
 
-**ID3-Tags (beim Download gesetzt):**
+**ID3 tags (set during download):**
 - `TIT2` — Title
 - `TPE1` — Artist
 - `TALB` — Album
 - `COMM` — Comment: `deezer:{track_id}|clusters:{cluster1,cluster2}`
 
-**Dependency:** `mutagen` für ID3-Tagging
+**Dependency:** `mutagen` for ID3 tagging
 
-### Metadaten (tracks.jsonl)
+### Metadata (tracks.jsonl)
 
-Eine JSON-Zeile pro Track. **Primärschlüssel:** `track_id` (Deezer Track-ID)
+One JSON line per track. **Primary key:** `track_id` (Deezer Track ID)
 
 ```jsonl
 {"track_id": 3770028292, "title": "Song Name", "artist": "Artist Name", "album": "Album", "clusters": ["rock", "charts_us"], "deezer_rank": 895000, "lastfm_playcount": 12500000, "lastfm_listeners": 450000, "lastfm_tags": ["rock", "alternative"], "file_path": "previews/a7/3770028292.mp3", "label": "hit", "robustness": "validated"}
 ```
 
-**Pflichtfelder:**
-- `track_id` — Deezer Track-ID (Primärschlüssel)
-- `title`, `artist`, `album` — Metadaten
-- `clusters` — Liste der zugehörigen Genre-Cluster
-- `deezer_rank` — Deezer Popularity-Wert
-- `file_path` — Relativer Pfad zur Preview-Datei
+**Required fields:**
+- `track_id` — Deezer Track ID (primary key)
+- `title`, `artist`, `album` — metadata
+- `clusters` — list of assigned genre clusters
+- `deezer_rank` — Deezer popularity value
+- `file_path` — relative path to preview file
 
-**Optionale Felder (nach Enrichment/Labeling):**
+**Optional fields (after enrichment/labeling):**
 - `lastfm_playcount`, `lastfm_listeners`, `lastfm_tags`
-- `label` — hit/mid/flop (nach Label-Berechnung)
+- `label` — hit/mid/flop (after label calculation)
 - `robustness` — validated/single_source/contested
 
 ### Playlists (M3U8)
 
-Extended M3U Format für lesbare Tracklisten:
+Extended M3U format for readable track lists:
 
 ```m3u8
 #EXTM3U
@@ -285,69 +285,69 @@ previews/a7/3770028292.mp3
 previews/e1/1234567.mp3
 ```
 
-**Generierung bei Bedarf** über Utility-Funktion in `scripts/utils/playlist.py`.
+**Generated on demand** via utility function in `scripts/utils/playlist.py`.
 
 ---
 
-## Verzeichnisstruktur (Repository)
+## Directory Structure (Repository)
 
 ```
 SpotilyzerTraining/
-├── CLAUDE.md                    # Dieses Dokument
-├── .env                         # API-Keys (LASTFM_API_KEY, nicht committen!)
-├── .env.example                 # Template für .env
+├── CLAUDE.md                    # This document
+├── .env                         # API keys (LASTFM_API_KEY, do not commit!)
+├── .env.example                 # Template for .env
 ├── .gitignore
 │
 ├── configs/
-│   ├── clusters.yaml            # Genre-Cluster-Definitionen mit Seed-Artists
-│   ├── clusters_recon.yaml      # Chart-Kategorisierung für Recon (siehe Chart-Expansion-Sektion)
-│   ├── paths.yaml               # Pfade (Preview-Speicherort etc.)
-│   ├── thresholds.yaml          # Rank/Plays-Schwellenwerte für Labels
-│   └── training.yaml            # Hyperparameter für XGBoost
+│   ├── clusters.yaml            # Genre cluster definitions with seed artists
+│   ├── clusters_recon.yaml      # Chart categorization for recon (see chart expansion section)
+│   ├── paths.yaml               # Paths (preview storage location etc.)
+│   ├── thresholds.yaml          # Rank/plays thresholds for labels
+│   └── training.yaml            # XGBoost hyperparameters
 │
 ├── scripts/
-│   ├── run_pipeline.py          # Orchestrierungs-Skript (Haupteinstieg)
-│   ├── scout_deezer.py          # Deezer-Scouting (Genre-Cluster + Charts)
+│   ├── run_pipeline.py          # Orchestration script (main entry point)
+│   ├── scout_deezer.py          # Deezer scouting (genre clusters + charts)
 │   ├── scout_spotify.py         # Spotify Charts CSV → datasets/spotify_charts/tracks.jsonl
-│   ├── download_previews.py     # Preview-Download (mit ID3-Tagging + Sharding)
-│   ├── enrich_lastfm.py         # Last.fm-Anreicherung
-│   ├── compute_labels.py        # Multi-Source-Label-Berechnung
-│   ├── extract_embeddings.py    # MERT-Embedding-Extraktion
-│   ├── train_model.py           # XGBoost-Training mit Sample Weights
-│   ├── evaluate.py              # Metriken + Confusion Matrix (Holdout-Set aus Bundle)
-│   ├── inspect_dataset.py       # Read-only Diagnose-Tool (Label-Verteilung, Robustheit, etc.)
-│   ├── analyze_clusters.py      # Cluster-Analyse: Sanity-Check, Stats, Overlap, Chart-Discovery
-│   ├── recon_clusters.py        # Cluster-Recon: Vorprüfung bekannter Cluster (Aktualität, Spam, Overlap) — VOR Scouting
-│   ├── _utils.py                # Shared helpers (logging, config-loader)
+│   ├── download_previews.py     # Preview download (with ID3 tagging + sharding)
+│   ├── enrich_lastfm.py         # Last.fm enrichment
+│   ├── compute_labels.py        # Multi-source label calculation
+│   ├── extract_embeddings.py    # MERT embedding extraction
+│   ├── train_model.py           # XGBoost training with sample weights
+│   ├── evaluate.py              # Metrics + confusion matrix (holdout set from bundle)
+│   ├── inspect_dataset.py       # Read-only diagnostic tool (label distribution, robustness, etc.)
+│   ├── analyze_clusters.py      # Cluster analysis: sanity check, stats, overlap, chart discovery
+│   ├── recon_clusters.py        # Cluster recon: pre-check of known clusters (freshness, spam, overlap) — before scouting
+│   ├── _utils.py                # Shared helpers (logging, config loader)
 │   └── utils/
 │       ├── __init__.py
 │       ├── paths.py             # get_shard_dir(), get_preview_path()
 │       ├── playlist.py          # create_playlist(), find_track()
-│       └── metadata.py          # JSONL lesen/schreiben/updaten
+│       └── metadata.py          # JSONL read/write/update
 │
-├── data/                        # Legacy, wird nicht mehr verwendet
+├── data/                        # Legacy, no longer used
 │   └── .gitkeep
 │
-├── logs/                        # Log-Dateien
+├── logs/                        # Log files
 │   ├── scout_YYYY-MM-DD.log
 │   ├── enrichment_YYYY-MM-DD.log
 │   └── training_YYYY-MM-DD.log
 │
-├── notebooks/                   # Jupyter für Exploration
+├── notebooks/                   # Jupyter for exploration
 │   └── exploration.ipynb
 │
 └── outputs/
-    ├── models/                  # Trainierte Modelle
-    │   └── spotilyzer_model_{embedder}_{date}.joblib  # z.B. MERTv1330M_20260317
-    ├── reports/                 # Evaluations-Reports
+    ├── models/                  # Trained models
+    │   └── spotilyzer_model_{embedder}_{date}.joblib  # e.g. MERTv1330M_20260317
+    ├── reports/                 # Evaluation reports
     │   └── training_report_{embedder}_{date}.json
-    ├── recon/                   # Recon-Track-Listen (ohne Preview-URLs)
+    ├── recon/                   # Recon track lists (without preview URLs)
     │   └── tracks_recon_TIMESTAMP.jsonl
-    └── embeddings/              # MERT-Embeddings (je Modell ein Unterordner)
+    └── embeddings/              # MERT embeddings (one subfolder per model)
         ├── MERT-v1-95M/         # 768-dim embeddings
-        │   ├── embeddings.npy       # Embedding-Vektoren [N×768]
-        │   ├── embeddings_meta.csv  # Track-Metadaten (ID, Pfad, etc.)
-        │   └── embeddings_info.json # Modell, Dim, Timestamp
+        │   ├── embeddings.npy       # Embedding vectors [N×768]
+        │   ├── embeddings_meta.csv  # Track metadata (ID, path, etc.)
+        │   └── embeddings_info.json # Model, dim, timestamp
         └── MERT-v1-330M/        # 1024-dim embeddings
             ├── embeddings.npy
             ├── embeddings_meta.csv
@@ -361,23 +361,23 @@ SpotilyzerTraining/
 ```powershell
 cd G:\Dev\source\SpotilyzerTraining
 
-# Virtuelle Umgebung
+# Virtual environment
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
 # Dependencies
 pip install pyyaml tqdm requests pylast rapidfuzz python-dotenv
-pip install mutagen                        # Für ID3-Tagging
-pip install pandas numpy                   # Für Embeddings-Pipeline (embeddings_meta.csv)
-pip install torch torchaudio transformers  # Für MERT
-pip install xgboost scikit-learn           # Für Training
-pip install jupyter matplotlib seaborn     # Für Notebooks (optional)
+pip install mutagen                        # For ID3 tagging
+pip install pandas numpy                   # For embeddings pipeline (embeddings_meta.csv)
+pip install torch torchaudio transformers  # For MERT
+pip install xgboost scikit-learn           # For training
+pip install jupyter matplotlib seaborn     # For notebooks (optional)
 
-# API-Keys einrichten
+# Set up API keys
 Copy-Item .env.example .env
-# Dann .env editieren und LASTFM_API_KEY eintragen
+# Then edit .env and enter LASTFM_API_KEY
 
-# Datenverzeichnis anlegen (falls noch nicht vorhanden)
+# Create data directory (if not yet present)
 New-Item -ItemType Directory -Force -Path "G:\Dev\SpotilyzerData\previews"
 New-Item -ItemType Directory -Force -Path "G:\Dev\SpotilyzerData\metadata"
 New-Item -ItemType Directory -Force -Path "G:\Dev\SpotilyzerData\playlists"
@@ -385,424 +385,424 @@ New-Item -ItemType Directory -Force -Path "G:\Dev\SpotilyzerData\playlists"
 
 ---
 
-## Workflow: Das Orchestrierungs-Skript
+## Workflow: The Orchestration Script
 
-**Haupteinstieg:** `python scripts/run_pipeline.py`
+**Main entry point:** `python scripts/run_pipeline.py`
 
-### Modi
+### Modes
 
 ```powershell
-# Interaktives Menü (M = Embedder wechseln, V = validated-only toggle)
+# Interactive menu (M = switch embedder, V = toggle validated-only)
 python scripts/run_pipeline.py
 
-# Mit Flags:
+# With flags:
 python scripts/run_pipeline.py --model 95M --validated-only
 python scripts/run_pipeline.py --model 330M --validated-only
 
-# Einzelne Skripte direkt (mit Modul-Datensatz):
+# Individual scripts directly (with module dataset):
 python scripts/extract_embeddings.py --model 95M --dataset spotify_charts --append
 python scripts/train_model.py --embedder 95M --dataset main spotify_charts --validated-only
 python scripts/evaluate.py --embedder 95M --dataset main spotify_charts --validated-only --save-report
 
-# Ohne Modul-Datensatz (nur main):
+# Without module dataset (main only):
 python scripts/train_model.py --embedder 95M --validated-only
 python scripts/evaluate.py --embedder 95M --validated-only --save-report
 
-# Explizites Modell evaluieren (wenn Autodetect nicht greift):
+# Evaluate explicit model (when autodetect doesn't work):
 python scripts/evaluate.py --model outputs/models/spotilyzer_model_MERTv195M_origparams_validated_20260318.joblib --embedder 95M --validated-only --save-report
 
-# Spotify Charts scouten (neuer Snapshot):
+# Scout Spotify Charts (new snapshot):
 python scripts/scout_spotify.py --input-dir G:/Dev/SpotilyzerData/spotify/YYYY-MM-DD --dry-run
 python scripts/scout_spotify.py --input-dir G:/Dev/SpotilyzerData/spotify/YYYY-MM-DD
 
-# Datensatz-Diagnose (read-only, kein Training):
-python scripts/inspect_dataset.py                    # Konsole
-python scripts/inspect_dataset.py --report           # + JSON nach outputs/reports/
-python scripts/inspect_dataset.py --validated-only   # Nur validated-Subset analysieren
+# Dataset diagnostics (read-only, no training):
+python scripts/inspect_dataset.py                    # Console
+python scripts/inspect_dataset.py --report           # + JSON to outputs/reports/
+python scripts/inspect_dataset.py --validated-only   # Analyze validated subset only
 ```
 
-**experiment_label in training.yaml:** Optionales Freitext-Label, das im Modell- und Report-Dateinamen erscheint (`experiment_label: "origparams"`). Nach Abschluss des Experiments auf `""` zurücksetzen.
+**experiment_label in training.yaml:** Optional free-text label that appears in the model and report filename (`experiment_label: "origparams"`). Reset to `""` after the experiment is complete.
 
-**WICHTIG:** Schritte 1–4 (Scout/Download/Enrich/Labels) nur bei Datensatz-Erweiterung ausführen. Für reines Neutraining eines Modells nur Schritte 5–7 (Embeddings → Train → Evaluate).
+**IMPORTANT:** Steps 1–4 (scout/download/enrich/labels) should only be run when extending the dataset. For pure model retraining, only run steps 5–7 (embeddings → train → evaluate).
 
-### analyze_clusters.py — Multi-Purpose Analyse-Tool
+### analyze_clusters.py — Multi-Purpose Analysis Tool
 
 ```powershell
-# Chart-Discovery: Welche weiteren Länder haben Deezer-Chart-Playlists?
-# → gibt YAML-Snippet aus, das direkt in clusters.yaml kopiert werden kann
+# Chart discovery: which other countries have Deezer chart playlists?
+# → outputs YAML snippet that can be copied directly into clusters.yaml
 python scripts/analyze_clusters.py --discover-charts
 
-# Sanity-Check: Sind konfigurierte Playlist-IDs noch gültig?
+# Sanity check: are configured playlist IDs still valid?
 python scripts/analyze_clusters.py --sanity
 
-# Cluster-Statistiken aus tracks.jsonl (Label-Verteilung, Rank-Statistiken)
+# Cluster statistics from tracks.jsonl (label distribution, rank statistics)
 python scripts/analyze_clusters.py --cluster-stats
 
-# Track-Overlap zwischen Genre-Clustern
+# Track overlap between genre clusters
 python scripts/analyze_clusters.py --overlap
 
-# Vollständiger Report (alle Checks)
+# Full report (all checks)
 python scripts/analyze_clusters.py --full
 python scripts/analyze_clusters.py --full --output outputs/reports/cluster_analysis.md
 ```
 
-**Typischer Einsatz:** Liest aus `clusters.yaml` (Training-Config) + `tracks.jsonl`. Für `--cluster-stats`/`--overlap` muss also ein Scouting-Lauf bereits erfolgt sein.
+**Typical use:** Reads from `clusters.yaml` (training config) + `tracks.jsonl`. For `--cluster-stats`/`--overlap`, a scouting run must have already been completed.
 
-**Hinweis zu `--label-distribution`:** Führt intern denselben Codepfad aus wie `--cluster-stats` — kein Unterschied im Output. Status unklar (möglicherweise als eigenständiger Pfad geplant, aber nicht implementiert).
+**Note on `--label-distribution`:** Internally runs the same code path as `--cluster-stats` — no difference in output. Status unclear (possibly planned as a standalone path but not implemented).
 
 ---
 
-### recon_clusters.py — Cluster-Vorprüfung
+### recon_clusters.py — Cluster Pre-Check
 
-Reconnaissance-Tool für bekannte Chart-Cluster. Liest aus `configs/clusters_recon.yaml` (NICHT `clusters.yaml`).
+Reconnaissance tool for known chart clusters. Reads from `configs/clusters_recon.yaml` (NOT `clusters.yaml`).
 
-**Was es tut:**
-- Track-Count, Rank-Verteilung (Min/Max/Median/P25/P75), Artist-Diversity
-- Release-Dates via Album-API — nur für 15 Sample-Tracks (Top 5 / Mid 5 / Bottom 5)
-- Overlap-Analyse zwischen Charts
-- Spam-Detection (Einzelkünstler-Dominanz, alte Releases, Nischen-Ranks)
+**What it does:**
+- Track count, rank distribution (min/max/median/P25/P75), artist diversity
+- Release dates via Album API — only for 15 sample tracks (top 5 / mid 5 / bottom 5)
+- Overlap analysis between charts
+- Spam detection (single-artist dominance, old releases, niche ranks)
 
-**Was es NICHT tut:** Preview-URLs, Downloads, `tracks.jsonl`-Schreibzugriff, Last.fm
+**What it does NOT do:** Preview URLs, downloads, `tracks.jsonl` write access, Last.fm
 
 ```powershell
-# Default: validated + suspicious Charts
+# Default: validated + suspicious charts
 python scripts/recon_clusters.py
 
-# Nur validierte Charts
+# Validated charts only
 python scripts/recon_clusters.py --scope validated
 
-# Alle inkl. excluded (vollständige Dokumentation)
+# All including excluded (complete documentation)
 python scripts/recon_clusters.py --scope all
 
-# Bestimmte Charts (aus beliebiger Kategorie)
+# Specific charts (from any category)
 python scripts/recon_clusters.py --charts KR AR CL
 
-# Ad-hoc: Chart ohne Config-Eintrag testen
+# Ad-hoc: test chart without config entry
 python scripts/recon_clusters.py --add-chart VN 1234567890 "Vietnam"
 
-# Dry-Run: zeigt Charts + geschätzte API-Calls
+# Dry-run: shows charts + estimated API calls
 python scripts/recon_clusters.py --dry-run
 ```
 
 **Output:**
-- `outputs/reports/recon_TIMESTAMP.json` — Statistiken + Warnings
-- `outputs/recon/tracks_recon_TIMESTAMP.jsonl` — Track-Liste (ohne Preview-URLs)
+- `outputs/reports/recon_TIMESTAMP.json` — statistics + warnings
+- `outputs/recon/tracks_recon_TIMESTAMP.jsonl` — track list (without preview URLs)
 
-**`clusters_recon.yaml` — Kategorien:**
+**`clusters_recon.yaml` — Categories:**
 
-| Kategorie | Beschreibung |
-|-----------|--------------|
-| `existing` | Bereits in `clusters.yaml` für Training konfiguriert |
-| `validated` | Offiziell (Deezer Charts), aktuell, keine Auffälligkeiten |
-| `suspicious` | Potenziell manipuliert — erfordert manuelle Entscheidung |
-| `excluded` | Nicht brauchbar (veraltet, user-kuratiert, API-Bug) |
+| Category | Description |
+|----------|-------------|
+| `existing` | Already configured in `clusters.yaml` for training |
+| `validated` | Official (Deezer Charts), current, no anomalies |
+| `suspicious` | Potentially manipulated — requires manual decision |
+| `excluded` | Not usable (outdated, user-curated, API bug) |
 
-**Bekannte Lücke:** Die `existing`-Charts (DE, US, UK, FR, BR, ES, JP, GLOBAL) haben in `clusters_recon.yaml` keine `playlist_id` — sie werden vom Recon übersprungen, auch bei `--scope all`. Sie sollten für eine vollständige Analyse mit Playlist-IDs ergänzt werden.
+**Known gap:** The `existing` charts (DE, US, UK, FR, BR, ES, JP, GLOBAL) have no `playlist_id` in `clusters_recon.yaml` — they are skipped by recon even with `--scope all`. They should be supplemented with playlist IDs for a complete analysis.
 
-**Spam-Detection-Schwellenwerte** (aus `recon_settings` in `clusters_recon.yaml`):
-- Einzelkünstler-Dominanz > 30% → Warnung
-- Artist-Diversity < 0.5 → Warnung
-- < 30% Releases aus letzten 12 Monaten → "Chart veraltet?"
-- Rank-Median > 900.000 → "Nischen-Content?"
+**Spam detection thresholds** (from `recon_settings` in `clusters_recon.yaml`):
+- Single-artist dominance > 30% → warning
+- Artist diversity < 0.5 → warning
+- < 30% releases from last 12 months → "Chart outdated?"
+- Rank median > 900,000 → "Niche content?"
 
 ---
 
-### Workflow: Cluster-Erweiterungsplanung
+### Workflow: Cluster Expansion Planning
 
-Dieser Workflow ist **Voraussetzung** für jeden neuen Scouting-Lauf mit erweiterten Clustern. Er läuft vor `scout_deezer.py` und ist von der normalen Trainings-Pipeline getrennt.
+This workflow is a **prerequisite** for any new scouting run with expanded clusters. It runs before `scout_deezer.py` and is separate from the normal training pipeline.
 
 ```
 1. analyze_clusters.py --discover-charts
-      → findet Playlist-IDs für neue Länder via Deezer-Suche
-      → gibt YAML-Snippet für clusters_recon.yaml aus
+      → finds playlist IDs for new countries via Deezer search
+      → outputs YAML snippet for clusters_recon.yaml
       ↓
-2. clusters_recon.yaml aktualisieren
-      → neue Einträge in validated/suspicious eintragen
-      → (manuell / durch Claude im Chat)
+2. Update clusters_recon.yaml
+      → enter new entries in validated/suspicious
+      → (manually / by Claude in chat)
       ↓
 3. recon_clusters.py
-      → Vorprüfung: Aktualität, Spam, Artist-Diversity, Overlap
-      → Report in outputs/reports/recon_TIMESTAMP.json
+      → pre-check: freshness, spam, artist diversity, overlap
+      → report in outputs/reports/recon_TIMESTAMP.json
       ↓
-4. Entscheidung: suspicious → validated oder excluded
-      → clusters_recon.yaml manuell aktualisieren
+4. Decision: suspicious → validated or excluded
+      → manually update clusters_recon.yaml
       ↓
-5. clusters.yaml aktualisieren
-      → validated Cluster eintragen (falls für Scouting vorgesehen)
+5. Update clusters.yaml
+      → enter validated clusters (if intended for scouting)
       ↓
 6. analyze_clusters.py --sanity
-      → prüft ob alle playlist_ids in clusters.yaml erreichbar sind
+      → checks whether all playlist_ids in clusters.yaml are reachable
       ↓
-7. Cluster-Planung
-      → welche Cluster fürs Scouting? Tier-Einteilung? Gewichtung?
-      → Basis: recon-Report + eigene Einschätzung
-      → Tier-System: siehe Chart-Expansion-Sektion unten
+7. Cluster planning
+      → which clusters for scouting? Tier assignment? Weighting?
+      → basis: recon report + own assessment
+      → tier system: see chart expansion section below
       ↓
 8. scout_deezer.py
-      → Scouting ausschließlich für beschlossene Cluster
+      → scouting exclusively for decided clusters
       ↓
 9. analyze_clusters.py --cluster-stats --overlap
-      → Post-Scouting-Analyse (braucht tracks.jsonl)
+      → post-scouting analysis (requires tracks.jsonl)
 ```
 
 ---
 
-## Chart-Expansion: Stand und Entscheidungen
+## Chart Expansion: Status and Decisions
 
-**Stand:** 2026-03-18
-**Referenzdokumente:** 
-- `outputs/reports/recon_*.json` — Recon-Reports
-- `outputs/recon/tracks_recon_*.jsonl` — Sample-Track-Listen
-- Claude.ai Project: Konsolidierter Index aus Chat-Logs (Obsidian workbench: `1_Continue_*.md`, `2_Datenquellen_*.md`, `3_Chat-Verlauf_*.md`)
+**As of:** 2026-03-18
+**Reference documents:**
+- `outputs/reports/recon_*.json` — recon reports
+- `outputs/recon/tracks_recon_*.jsonl` — sample track lists
+- Claude.ai Project: Consolidated index from chat logs (Obsidian workbench: `1_Continue_*.md`, `2_Datenquellen_*.md`, `3_Chat-Verlauf_*.md`)
 
-### Hintergrund: Warum Chart-Expansion?
+### Background: Why Chart Expansion?
 
-**Kernproblem:** Zu wenige Hit-Samples (623 von 4813 = 12.9%). FR/BR/ES-Charts lieferten fast nur Mids/Flops (+10 Hits, +645 Flops, +871 Mids). Hit Recall stagniert bei 27–30%.
+**Core problem:** Too few Hit samples (623 of 4813 = 12.9%). FR/BR/ES charts delivered almost only Mids/Flops (+10 Hits, +645 Flops, +871 Mids). Hit Recall stagnated at 27–30%.
 
-**Ziel:** ≥2000 Hit-Samples durch systematische Chart-Erweiterung.
+**Goal:** ≥2000 Hit samples through systematic chart expansion.
 
-### Discovery: Deezer Chart-Infrastruktur
+### Discovery: Deezer Chart Infrastructure
 
-**Erkenntnis 1: "Deezer Charts" Account**
-- Account-ID: **637006841** (nicht die Editorial-ID 2!)
-- Semi-offizieller Account mit automatisiert generierten Länder-Charts
-- Alle Charts haben ~100 Tracks, werden regelmäßig aktualisiert
+**Finding 1: "Deezer Charts" Account**
+- Account ID: **637006841** (not the editorial ID 2!)
+- Semi-official account with automatically generated country charts
+- All charts have ~100 tracks, updated regularly
 
-**Erkenntnis 2: Search-API-Bug**
-- Die Deezer Search-API liefert **0 Follower** für diese Playlists
-- Echte Follower-Zahlen nur via direktem Playlist-API-Call (`/playlist/{id}`)
-- Beispiel: "Top Italy" zeigt 0 Follower in Search, aber 678.285 via Playlist-API
+**Finding 2: Search API Bug**
+- The Deezer Search API returns **0 followers** for these playlists
+- Real follower counts only via direct Playlist API call (`/playlist/{id}`)
+- Example: "Top Italy" shows 0 followers in search, but 678,285 via Playlist API
 
-**Erkenntnis 3: Release-Date-Limitation**
-- Playlist-Track-API liefert kein `release_date` im Album-Objekt
-- Workaround in `recon_clusters.py`: Album-API-Call für 15 Sample-Tracks (Top 5 / Mid 5 / Bottom 5)
+**Finding 3: Release Date Limitation**
+- Playlist Track API doesn't return `release_date` in the album object
+- Workaround in `recon_clusters.py`: Album API call for 15 sample tracks (top 5 / mid 5 / bottom 5)
 
-### Chart-Kategorisierung (vollständig)
+### Chart Categorization (complete)
 
-#### Existierend (8) — bereits in `clusters.yaml`
+#### Existing (8) — already in `clusters.yaml`
 
 | Code | Name | Status |
 |------|------|--------|
-| DE | Germany | Aktiv |
-| US | United States | Aktiv |
-| UK | United Kingdom | Aktiv |
-| FR | France | Aktiv |
-| JP | Japan | Aktiv |
-| BR | Brazil | Aktiv |
-| ES | Spain | Aktiv |
-| GLOBAL | Worldwide | Aktiv |
+| DE | Germany | Active |
+| US | United States | Active |
+| UK | United Kingdom | Active |
+| FR | France | Active |
+| JP | Japan | Active |
+| BR | Brazil | Active |
+| ES | Spain | Active |
+| GLOBAL | Worldwide | Active |
 
-#### Validiert (22) — bereit für Integration
+#### Validated (22) — ready for integration
 
-**Europa:**
-| Code | Playlist-ID | Follower | Bemerkung |
-|------|-------------|----------|-----------|
-| IT | 1116187241 | 678K | Aktuell, Bruno Mars / Alex Warren |
-| NL | 1266971851 | 273K | Aktuell |
-| SE | 1313620305 | 69K | Aktuell |
-| AT | 1313615765 | 61K | Aktuell |
-| CH | 1313617925 | 58K | Aktuell |
-| BE | 1266968331 | 152K | Aktuell, Taylor Swift |
-| NO | 1313619885 | 15K | Aktuell |
-| DK | 1313618905 | 32K | Aktuell |
-| FI | 1221034071 | 56K | Lokale Künstler! |
-| IE | 1313619455 | 39K | Aktuell |
-| PL | 1266972311 | 107K | Aktuell |
+**Europe:**
+| Code | Playlist ID | Followers | Notes |
+|------|-------------|-----------|-------|
+| IT | 1116187241 | 678K | Current, Bruno Mars / Alex Warren |
+| NL | 1266971851 | 273K | Current |
+| SE | 1313620305 | 69K | Current |
+| AT | 1313615765 | 61K | Current |
+| CH | 1313617925 | 58K | Current |
+| BE | 1266968331 | 152K | Current, Taylor Swift |
+| NO | 1313619885 | 15K | Current |
+| DK | 1313618905 | 32K | Current |
+| FI | 1221034071 | 56K | Local artists! |
+| IE | 1313619455 | 39K | Current |
+| PL | 1266972311 | 107K | Current |
 
-**Amerika:**
-| Code | Playlist-ID | Follower | Bemerkung |
-|------|-------------|----------|-----------|
+**Americas:**
+| Code | Playlist ID | Followers | Notes |
+|------|-------------|-----------|-------|
 | MX | 1111142361 | 1.05M | Latin Hot, Peso Pluma / Bad Bunny |
-| CA | 1652248171 | 42K | Aktuell |
-| CO | 1116188451 | 1.5M | Latin aktuell, Ryan Castro |
+| CA | 1652248171 | 42K | Current |
+| CO | 1116188451 | 1.5M | Latin current, Ryan Castro |
 
-**Asien-Pazifik:**
-| Code | Playlist-ID | Follower | Bemerkung |
-|------|-------------|----------|-----------|
-| AU | 1313616925 | 59K | Aktuell |
-| ID | 1116188761 | 338K | Aktuell |
-| PH | 1362518895 | 57K | Aktuell |
-| SG | 1313620765 | 21K | Aktuell |
-| MY | 1362515675 | 5K | Lokale Acts |
+**Asia-Pacific:**
+| Code | Playlist ID | Followers | Notes |
+|------|-------------|-----------|-------|
+| AU | 1313616925 | 59K | Current |
+| ID | 1116188761 | 338K | Current |
+| PH | 1362518895 | 57K | Current |
+| SG | 1313620765 | 21K | Current |
+| MY | 1362515675 | 5K | Local acts |
 
 **MENA:**
-| Code | Playlist-ID | Follower | Bemerkung |
-|------|-------------|----------|-----------|
-| EG | 1362501615 | 111K | MENA-Markt |
-| SA | 1362521285 | 27K | MENA-Markt |
-| ZA | 1362528775 | 62K | Aktuell |
+| Code | Playlist ID | Followers | Notes |
+|------|-------------|-----------|-------|
+| EG | 1362501615 | 111K | MENA market |
+| SA | 1362521285 | 27K | MENA market |
+| ZA | 1362528775 | 62K | Current |
 
-#### Fragwürdig (5) — manuelle Prüfung erforderlich
+#### Suspicious (5) — manual review required
 
-| Code | Problem | Sample-Tracks |
+| Code | Problem | Sample Tracks |
 |------|---------|---------------|
-| KR | Klassik-Orchester auf #2/#3 — Bot-Manipulation? | Borodine, Saint-Saëns statt K-Pop |
-| AR | Nur BTS/Jimin — K-Pop Stan Takeover | "Who", "Set Me Free", "Let Me Know" |
-| CL | NUR alte BTS-Tracks (2014!) — definitiv manipuliert | "Danger", "24/7=Heaven" |
-| TH | Seltsamer Mix — französische Star Academy auf #3? | Ungewöhnliche Genre-Mischung |
-| PT | "Barulho Para Relaxar" = White-Noise-Tracks | Kim Wilde "You Came" (1988) |
+| KR | Classical orchestra at #2/#3 — bot manipulation? | Borodine, Saint-Saëns instead of K-Pop |
+| AR | BTS/Jimin only — K-Pop stan takeover | "Who", "Set Me Free", "Let Me Know" |
+| CL | OLD BTS tracks only (2014!) — definitely manipulated | "Danger", "24/7=Heaven" |
+| TH | Strange mix — French Star Academy at #3? | Unusual genre mix |
+| PT | "Barulho Para Relaxar" = white noise tracks | Kim Wilde "You Came" (1988) |
 
-**Entscheidung ausstehend:** Diese Charts könnten trotzdem brauchbare Tracks enthalten, wenn man die Top-Positionen ignoriert. Erfordert manuellen Recon-Lauf mit `--charts KR AR CL TH PT` und Einzelprüfung.
+**Decision pending:** These charts might still contain usable tracks if top positions are ignored. Requires a manual recon run with `--charts KR AR CL TH PT` and individual review.
 
-#### Ausgeschlossen (4) — nicht brauchbar
+#### Excluded (4) — not usable
 
-| Code | Grund | Detail |
-|------|-------|--------|
-| TR | Veraltet | "Top Turkey **2020**" — 6 Jahre alt |
-| AE/UAE | User-kuratiert | 2019, nur 7 Follower |
-| NZ | User-kuratiert | 293 Tracks, keine echte Chart |
-| IN | API-Bug | Suche liefert Indonesia statt India |
+| Code | Reason | Detail |
+|------|--------|--------|
+| TR | Outdated | "Top Turkey **2020**" — 6 years old |
+| AE/UAE | User-curated | 2019, only 7 followers |
+| NZ | User-curated | 293 tracks, not a real chart |
+| IN | API bug | Search returns Indonesia instead of India |
 
-#### Nicht durchsucht (10) — Status unklar
+#### Not searched (10) — status unclear
 
-CN, RU, VN, TW, HK, IL, GR, CZ, HU, RO — in früheren Sessions als problematisch markiert, Begründung nicht mehr nachvollziehbar. Bei Bedarf erneut prüfen.
+CN, RU, VN, TW, HK, IL, GR, CZ, HU, RO — marked as problematic in earlier sessions, reason no longer traceable. Review again if needed.
 
-### Geplantes Tier-System
+### Planned Tier System
 
-**Konzept:** Charts nach Marktrelevanz gewichten. Noch nicht implementiert — finale Einteilung erfolgt nach Recon-Daten-Analyse (Overlap, Rank-Verteilung).
+**Concept:** Weight charts by market relevance. Not yet implemented — final assignment to follow recon data analysis (overlap, rank distribution).
 
-| Tier | Gewicht | Kriterien | Kandidaten |
-|------|---------|-----------|------------|
-| **Tier 1** | 1.0 | Internationale Referenz, definiert Mainstream | US, UK, GLOBAL |
-| **Tier 2** | 0.85 | Große Export-Märkte, signifikanter Einfluss | DE, FR, AU, CA, JP, BR |
-| **Tier 3** | 0.7 | Mittelgroße Märkte, eigene Szene | ES, IT, MX, NL, SE, KR (falls validiert) |
-| **Tier 4** | 0.5 | Lokale Märkte, Nischen-Relevanz | PL, AT, CH, BE, NO, DK, FI, IE, etc. |
+| Tier | Weight | Criteria | Candidates |
+|------|--------|----------|------------|
+| **Tier 1** | 1.0 | International reference, defines mainstream | US, UK, GLOBAL |
+| **Tier 2** | 0.85 | Large export markets, significant influence | DE, FR, AU, CA, JP, BR |
+| **Tier 3** | 0.7 | Mid-sized markets, own scene | ES, IT, MX, NL, SE, KR (if validated) |
+| **Tier 4** | 0.5 | Local markets, niche relevance | PL, AT, CH, BE, NO, DK, FI, IE, etc. |
 
-**Anwendung (geplant):**
-- Track in mehreren Charts → Durchschnitt der Tier-Gewichte
-- Track nur in Tier-4-Chart → `robustness * 0.5`
-- Implementierung in `thresholds.yaml` oder `clusters.yaml` (noch zu entscheiden)
+**Application (planned):**
+- Track in multiple charts → average of tier weights
+- Track only in Tier-4 chart → `robustness * 0.5`
+- Implementation in `thresholds.yaml` or `clusters.yaml` (still to be decided)
 
-**Wichtig:** "Gewichtungen sind Vermutungen mit Krawatte." Das Tier-System ist eine Heuristik, keine wissenschaftlich validierte Metrik. Transparenz über Unsicherheit hat Vorrang vor Pseudo-Präzision.
+**Important:** "Weights are guesses in a suit." The tier system is a heuristic, not a scientifically validated metric. Transparency about uncertainty takes precedence over pseudo-precision.
 
-### Spam-Detection-Kriterien (in recon_clusters.py)
+### Spam Detection Criteria (in recon_clusters.py)
 
-| Kriterium | Schwellenwert | Bedeutung |
-|-----------|---------------|-----------|
-| Einzelkünstler-Dominanz | > 30% | Ein Artist dominiert den Chart → Streaming-Farm? |
-| Artist-Diversity | < 0.5 | Wenige unique Artists / Total Tracks |
-| Release-Aktualität | < 30% aus 12 Mo. | Chart veraltet? |
-| Rank-Median | > 900.000 | Nischen-Content statt Mainstream-Chart |
+| Criterion | Threshold | Meaning |
+|-----------|-----------|--------|
+| Single-artist dominance | > 30% | One artist dominates the chart → streaming farm? |
+| Artist diversity | < 0.5 | Few unique artists / total tracks |
+| Release freshness | < 30% from last 12 months | Chart outdated? |
+| Rank median | > 900,000 | Niche content instead of mainstream chart |
 
-### Status Deezer Chart-Erweiterung (2026-03-19)
+### Status of Deezer Chart Expansion (2026-03-19)
 
-**Entscheidung:** Deezer-Chart-Erweiterung wird **nicht weiter priorisiert**. Erfahrung zeigt, dass zusätzliche Deezer-Länder-Charts überwiegend Mids/Flops liefern, kaum Hits. Stattdessen: `kworb_deezer`-Modul.
+**Decision:** Deezer chart expansion is **not further prioritized**. Experience shows that additional Deezer country charts deliver predominantly Mids/Flops, few Hits. Instead: `kworb_deezer` module.
 
-Verbleibende offene Punkte (nur bei Bedarf):
-1. `clusters_recon.yaml`: Playlist-IDs für DE/US/UK/FR/BR/ES/JP/GLOBAL ergänzen (→ Recon überspringt sie aktuell)
-2. KR, TH: Gezielter Recon-Lauf — nach kworb_deezer-Implementierung entscheiden ob relevant
-3. 22 validated Charts ggf. als `robustness`-Signal in kworb_deezer nutzen (nicht als Primärquelle)
+Remaining open points (only if needed):
+1. `clusters_recon.yaml`: Add playlist IDs for DE/US/UK/FR/BR/ES/JP/GLOBAL (→ recon currently skips them)
+2. KR, TH: Targeted recon run — decide after kworb_deezer implementation whether relevant
+3. 22 validated charts possibly as `robustness` signal in kworb_deezer (not as primary source)
 
-### Externe Chart-Quellen (Primärstrategie ab Session 3)
+### External Chart Sources (Primary Strategy from Session 3)
 
-Deezer-Charts haben eine harte Decke. Primärstrategie ist jetzt das `kworb_deezer`-Modul.
+Deezer charts have a hard ceiling. Primary strategy is now the `kworb_deezer` module.
 
-**Hauptquellen (für kworb_deezer Phase 1):**
+**Main sources (for kworb_deezer Phase 1):**
 
-| Quelle | Zugang | Format | Märkte |
-|--------|--------|--------|--------|
-| **Kworb.net** | Scraping, kein Login | Statisches HTML, `pandas.read_html()` | ~70 Länder, Spotify Top 200 |
-| **charts.spotify.com** | Manueller Download, Login erforderlich | CSV pro Land/Woche | ~70 Länder |
-| **MusicBrainz** | API (1 req/s), kostenlos | JSON | ISRC-Lookup für Deduplizierung |
+| Source | Access | Format | Markets |
+|--------|--------|--------|---------|
+| **Kworb.net** | Scraping, no login | Static HTML, `pandas.read_html()` | ~70 countries, Spotify Top 200 |
+| **charts.spotify.com** | Manual download, login required | CSV per country/week | ~70 countries |
+| **MusicBrainz** | API (1 req/s), free | JSON | ISRC lookup for deduplication |
 
-**Ergänzende Quellen (Phase 2/3):**
+**Supplementary sources (Phase 2/3):**
 
-| Quelle | Zugang | Mehrwert |
-|--------|--------|----------|
-| Billboard Japan | CSV-Download, kein Login | J-Pop ohne Scraping |
-| Hung Medien Network | Scraping (konsistentes Schema) | 15 EU-Länder + Ozeanien |
-| Zertifizierungs-DBs (BVMI, BPI, RIAA, etc.) | Öffentlich durchsuchbar | `robustness=validated` Signal |
+| Source | Access | Value |
+|--------|--------|-------|
+| Billboard Japan | CSV download, no login | J-Pop without scraping |
+| Hung Medien Network | Scraping (consistent schema) | 15 EU countries + Oceania |
+| Certification DBs (BVMI, BPI, RIAA, etc.) | Publicly searchable | `robustness=validated` signal |
 
-**Nicht verwendbar:**
+**Not usable:**
 
-| Quelle | Grund |
-|--------|-------|
-| Spotify API | Keine Stream-Counts; ToS verbietet Scraping |
-| Apple Music | Keine Playcount-Daten öffentlich |
-| Shazam | Keine öffentliche API seit 2019 |
+| Source | Reason |
+|--------|--------|
+| Spotify API | No stream counts; ToS prohibits scraping |
+| Apple Music | No public playcount data |
+| Shazam | No public API since 2019 |
 
 ---
 
-### Abhängigkeiten zwischen Schritten
+### Step Dependencies
 
 ```
-Haupt-Pipeline (Deezer):
+Main Pipeline (Deezer):
 1. scout_deezer.py
     ↓ metadata/tracks.jsonl (initial: track_id, title, artist, album, clusters, deezer_rank)
 2. download_previews.py [--dataset main]
-    ↓ previews/{shard}/{track_id}.mp3 (mit ID3-Tags, MD5-Sharding)
-    ↓ metadata/tracks.jsonl (file_path hinzugefügt)
+    ↓ previews/{shard}/{track_id}.mp3 (with ID3 tags, MD5 sharding)
+    ↓ metadata/tracks.jsonl (file_path added)
 3. enrich_lastfm.py
-    ↓ metadata/tracks.jsonl (lastfm_* Felder hinzugefügt)
+    ↓ metadata/tracks.jsonl (lastfm_* fields added)
 4. compute_labels.py
-    ↓ metadata/tracks.jsonl (label + robustness hinzugefügt)
+    ↓ metadata/tracks.jsonl (label + robustness added)
 
-Modul-Pipeline (spotify_charts):
+Module Pipeline (spotify_charts):
 1b. scout_spotify.py --input-dir G:/Dev/SpotilyzerData/spotify/YYYY-MM-DD
     ↓ datasets/spotify_charts/tracks.jsonl (track_id, label=hit/mid, robustness=validated)
 2b. download_previews.py --dataset spotify_charts
-    ↓ previews/{shard}/{track_id}.mp3 (geteilt mit Haupt-Pipeline!)
-    ↓ datasets/spotify_charts/tracks.jsonl (file_path hinzugefügt)
+    ↓ previews/{shard}/{track_id}.mp3 (shared with main pipeline!)
+    ↓ datasets/spotify_charts/tracks.jsonl (file_path added)
 
-Modul-Pipeline (kworb):
+Module Pipeline (kworb):
 1c. scout_kworb.py --min-streams 20000000 --max-tracks 3000 --skip-mb
     ↓ datasets/kworb/tracks.jsonl (chart_entries, chart_score, label, robustness=validated)
-    ↓ datasets/kworb/isrc_cache.json + deezer_miss_cache.json (Checkpoint-System)
-    (--skip-mb: MusicBrainz überspringen, direkt Deezer-Suche)
-    (Checkpoint alle 100 Tracks: kworb_checkpoint.jsonl, bei Abschluss gelöscht)
+    ↓ datasets/kworb/isrc_cache.json + deezer_miss_cache.json (checkpoint system)
+    (--skip-mb: skip MusicBrainz, go directly to Deezer search)
+    (Checkpoint every 100 tracks: kworb_checkpoint.jsonl, deleted on completion)
 2c. download_previews.py --dataset kworb
-    ↓ previews/{shard}/{track_id}.mp3 (geteilt, meist bereits vorhanden!)
-    ↓ datasets/kworb/tracks.jsonl (file_path hinzugefügt)
+    ↓ previews/{shard}/{track_id}.mp3 (shared, usually already present!)
+    ↓ datasets/kworb/tracks.jsonl (file_path added)
 
-Gemeinsame Pipeline (ab Embeddings):
+Shared Pipeline (from Embeddings):
 5. extract_embeddings.py [--model 95M|330M] [--dataset spotify_charts --append]
     ↓ outputs/embeddings/MERT-v1-{version}/embeddings.npy + embeddings_meta.csv + embeddings_info.json
-    (Checkpoint/Resume: --resume Flag, speichert alle 500 Tracks)
-    (--append: neue Tracks zu bestehendem .npy hinzufügen)
+    (Checkpoint/resume: --resume flag, saves every 500 tracks)
+    (--append: add new tracks to existing .npy)
 6. train_model.py [--embedder 95M|330M] [--dataset main spotify_charts] [--validated-only]
     ↓ outputs/models/spotilyzer_model_{tag}[_{exp_label}][_{datasets}][_validated]_{date}.joblib
     ↓ outputs/reports/training_report_{tag}_{datasets}_{date}.json
     (Sample weights: compute_sample_weight("balanced") × robustness weights)
-    (test_track_ids werden im Bundle gespeichert → Holdout-Evaluation in evaluate.py)
-    (Per-Embedder-Params aus training.yaml: models.MERT-v1-95M / models.MERT-v1-330M)
+    (test_track_ids stored in bundle → holdout evaluation in evaluate.py)
+    (Per-embedder params from training.yaml: models.MERT-v1-95M / models.MERT-v1-330M)
 7. evaluate.py [--embedder 95M|330M] [--dataset main spotify_charts] [--validated-only] [--save-report]
     ↓ outputs/reports/evaluation_report_{model_suffix}.json
-    (Testet nur auf Holdout-Set aus Bundle — nicht auf Trainingsdaten!)
-    (Autodetect wählt neuestes *validated*.joblib für den Embedder)
+    (Tests only on holdout set from bundle — not on training data!)
+    (Autodetect selects newest *validated*.joblib for the embedder)
 ```
 
 ---
 
-## Datenquellen
+## Data Sources
 
-### Primär: Deezer (Audio + Rank)
+### Primary: Deezer (Audio + Rank)
 
-- **API:** Kostenlos, keine Auth für öffentliche Endpoints
-- **Audio:** 30-Sekunden-Previews (intelligent ausgewählt, repräsentativ)
-- **Metrik:** `rank` (0 - ~1.000.000, höher = populärer)
-- **Einschränkung:** Preview-URLs expiren nach ~15 Min (frisch holen vor Download!)
+- **API:** Free, no auth for public endpoints
+- **Audio:** 30-second previews (intelligently selected, representative)
+- **Metric:** `rank` (0 - ~1,000,000, higher = more popular)
+- **Limitation:** Preview URLs expire after ~15 min (fetch fresh before downloading!)
 
-### Sekundär: Last.fm (Validierung)
+### Secondary: Last.fm (Validation)
 
-- **API:** Kostenlos für nicht-kommerzielle Nutzung, API-Key erforderlich
-- **Metriken:** `playcount` (absolute Plays), `listeners` (unique Listeners)
-- **Vorteil:** Absolute Zahlen statt relativer Ranks
-- **Matching:** Über Artist + Title (Fuzzy-Matching mit rapidfuzz)
+- **API:** Free for non-commercial use, API key required
+- **Metrics:** `playcount` (absolute plays), `listeners` (unique listeners)
+- **Advantage:** Absolute numbers instead of relative ranks
+- **Matching:** Via artist + title (fuzzy matching with rapidfuzz)
 
-### Verworfen
+### Discarded
 
-| Quelle | Grund |
-|--------|-------|
-| Spotify API | Audio-Features entfernt (Nov 2024), Popularity entfernt (Feb 2026) |
-| Shazam | Keine öffentliche API seit 2019 |
-| SoundCloud | ToS verbietet ML-Training (2025) |
-| YouTube | Machbar, aber Matching-Problem zu aufwändig |
+| Source | Reason |
+|--------|--------|
+| Spotify API | Audio features removed (Nov 2024), Popularity removed (Feb 2026) |
+| Shazam | No public API since 2019 |
+| SoundCloud | ToS prohibits ML training (2025) |
+| YouTube | Feasible but matching problem too costly |
 
 ---
 
-## Genre-Cluster
+## Genre Clusters
 
-### Aktuelle Cluster (23)
+### Current Clusters (23)
 
 **Metal (7):** extreme_metal, gothic, heavy_metal, power_symphonic, modern_metal, metalcore, crossover
 
@@ -826,52 +826,52 @@ Gemeinsame Pipeline (ab Embeddings):
 
 **Charts:** DE, US, UK, FR, JP, BR, ES, GLOBAL
 
-### Scouting-Ansatz je Cluster
+### Scouting Approach per Cluster
 
-| Cluster-ID | Deezer Genre-ID | Radio-IDs | Scouting |
+| Cluster ID | Deezer Genre ID | Radio IDs | Scouting |
 |------------|----------------|-----------|----------|
-| `pop_mainstream` | 132 | — | Seed-only (Pop-Radio zu breit) |
-| `pop_dance` | 113 | 30951, 42122 | Radio + Seed |
-| `hiphop_mainstream` | 116 | 31021, 30991 | Radio-Hauptquelle |
-| `rnb_soul` | 165+169 | 30881, 42402, 38445 | Radio + Seed |
-| `country` | 84 | 42282 | Radio + Seed |
-| `latin` | 197 | 30941 | Radio + Seed |
-| `indie_folk` | 85+466 | 30781, 42262 | Radio + Seed |
+| `pop_mainstream` | 132 | — | Seed only (Pop Radio too broad) |
+| `pop_dance` | 113 | 30951, 42122 | Radio + seed |
+| `hiphop_mainstream` | 116 | 31021, 30991 | Radio primary source |
+| `rnb_soul` | 165+169 | 30881, 42402, 38445 | Radio + seed |
+| `country` | 84 | 42282 | Radio + seed |
+| `latin` | 197 | 30941 | Radio + seed |
+| `indie_folk` | 85+466 | 30781, 42262 | Radio + seed |
 
-**Nicht verwendete Genres (nach Analyse):**
-- Genre 106 (Electro/Techno): Kein Pop-Bezug, würde 4. Electronic-Cluster ergeben
-- Genre 152 (Rock): Deezer-Radio ist Deutschrock-Mix, Overlap mit bestehenden Clustern
-- Genre 464 (Heavy Metal): Deezer-Radio = Within Temptation/Helloween, Overlap mit gothic/power_symphonic
-- Genre 144 (Reggae): Zu nischig, Ranks meist 300–420K (fast alles Mid)
-- `hiphop_alternative`: Kein fokussiertes Deezer-Radio vorhanden
+**Unused genres (after analysis):**
+- Genre 106 (Electro/Techno): No pop connection, would create a 4th electronic cluster
+- Genre 152 (Rock): Deezer Radio is a German rock mix, overlap with existing clusters
+- Genre 464 (Heavy Metal): Deezer Radio = Within Temptation/Helloween, overlap with gothic/power_symphonic
+- Genre 144 (Reggae): Too niche, ranks mostly 300–420K (almost all Mid)
+- `hiphop_alternative`: No focused Deezer Radio available
 
-### Radio-Scouting (Hinweis für Implementierung)
+### Radio Scouting (Implementation Note)
 
-Die neuen Cluster nutzen das Feld `radios` in `clusters.yaml`. Das erfordert eine Erweiterung von `scout_deezer.py` um Radio-Scouting via `/radio/{id}/tracks`.
+The new clusters use the `radios` field in `clusters.yaml`. This requires extending `scout_deezer.py` to support radio scouting via `/radio/{id}/tracks`.
 
-### Cluster-Konfiguration
+### Cluster Configuration
 
-Cluster-Definitionen mit Seed-Artists und Radio-IDs in `configs/clusters.yaml`.
+Cluster definitions with seed artists and radio IDs in `configs/clusters.yaml`.
 
 ---
 
-## Label-Strategie: Multi-Source mit Konsens
+## Label Strategy: Multi-Source with Consensus
 
-### Einzelsignale
+### Individual Signals
 
 **Deezer:**
-- Hit: rank > 700.000
-- Flop: rank < 300.000
-- Mid: dazwischen
+- Hit: rank > 700,000
+- Flop: rank < 300,000
+- Mid: in between
 
 **Last.fm:**
 - Hit: playcount > 1M AND listeners > 100k
 - Flop: playcount < 100k OR listeners < 10k
-- Mid: dazwischen
+- Mid: in between
 
-### Konsens-Label
+### Consensus Label
 
-| Deezer | Last.fm | → Label | Robustheit |
+| Deezer | Last.fm | → Label | Robustness |
 |--------|---------|---------|------------|
 | Hit | Hit | Hit | validated |
 | Hit | Flop | Mid | contested |
@@ -879,21 +879,21 @@ Cluster-Definitionen mit Seed-Artists und Radio-IDs in `configs/clusters.yaml`.
 | Flop | Flop | Flop | validated |
 | ... | ... | ... | ... |
 
-### Sample-Gewichtung im Training
+### Sample Weighting in Training
 
-| Robustheit | Gewicht | Bedeutung |
-|------------|---------|-----------|
-| validated | 1.0 | Beide Quellen einig → volles Gewicht |
-| single_source | 0.5 | Nur Deezer → halbes Gewicht |
-| contested | 0.7 | Widerspruch → reduziert |
+| Robustness | Weight | Meaning |
+|------------|--------|---------|
+| validated | 1.0 | Both sources agree → full weight |
+| single_source | 0.5 | Deezer only → half weight |
+| contested | 0.7 | Contradiction → reduced |
 
 ---
 
-## UI-Integration (für Hauptprojekt)
+## UI Integration (for Main Project)
 
 ### Composite Score
 
-Das Modell liefert `hit_probability`. Für die UI wird ein gewichteter Score berechnet:
+The model returns `hit_probability`. For the UI a weighted score is calculated:
 
 ```python
 composite_score = hit_probability * robustness_factor
@@ -904,59 +904,59 @@ composite_score = hit_probability * robustness_factor
 #   contested: 0.7
 ```
 
-### Farbbalken-Sättigung
+### Color Bar Saturation
 
-| Robustheit | Farbsättigung |
-|------------|---------------|
-| validated | 100% (kräftig) |
-| single_source | ~65% (heller) |
-| contested | ~40% (blass) |
+| Robustness | Color saturation |
+|------------|------------------|
+| validated | 100% (vivid) |
+| single_source | ~65% (lighter) |
+| contested | ~40% (pale) |
 
 ---
 
 ## Logging
 
-Alle Skripte schreiben Logs nach `logs/`:
+All scripts write logs to `logs/`:
 
 ```
 logs/
-├── scout_2026-03-08.log        # Deezer-Scouting
-├── download_2026-03-08.log     # Preview-Download
-├── enrichment_2026-03-08.log   # Last.fm (inkl. Match-Fehler!)
-├── labels_2026-03-08.log       # Label-Berechnung
-├── training_2026-03-08.log     # Modell-Training
-└── pipeline_2026-03-08.log     # Orchestrierung
+├── scout_2026-03-08.log        # Deezer scouting
+├── download_2026-03-08.log     # Preview download
+├── enrichment_2026-03-08.log   # Last.fm (including match errors!)
+├── labels_2026-03-08.log       # Label calculation
+├── training_2026-03-08.log     # Model training
+└── pipeline_2026-03-08.log     # Orchestration
 ```
 
-**Wichtig für Enrichment-Log:**
-- Jeder nicht gefundene Track wird geloggt
-- Match-Confidence unter Schwellenwert wird geloggt
-- API-Fehler werden mit Retry-Count geloggt
+**Important for enrichment log:**
+- Every track not found is logged
+- Match confidence below threshold is logged
+- API errors are logged with retry count
 
 ---
 
-## Konfigurationsdateien
+## Configuration Files
 
 ### configs/paths.yaml
 
 ```yaml
 paths:
-  # Externes Datenverzeichnis (NICHT im Repo)
+  # External data directory (NOT in repo)
   data_root: "G:/Dev/SpotilyzerData"
 
-  # Preview-Dateien (MD5-Sharding)
+  # Preview files (MD5 sharding)
   previews: "G:/Dev/SpotilyzerData/previews"
 
-  # Metadaten (JSONL)
+  # Metadata (JSONL)
   metadata: "G:/Dev/SpotilyzerData/metadata"
 
   # Playlists (M3U8)
   playlists: "G:/Dev/SpotilyzerData/playlists"
 
-  # Embeddings (können im Repo bleiben)
+  # Embeddings (can stay in repo)
   embeddings: "./outputs/embeddings"
 
-  # Hauptprojekt (für Model-Deployment)
+  # Main project (for model deployment)
   main_project: "../Spotilyzer"
   main_project_models: "../Spotilyzer/models"
 ```
@@ -969,10 +969,10 @@ deezer:
   flop_threshold: 300000
 
 lastfm:
-  hit_playcount: 1000000      # 1M (gesenkt von 5M)
-  hit_listeners: 100000        # 100k (gesenkt von 500k)
-  flop_playcount: 100000       # 100k (gesenkt von 500k)
-  flop_listeners: 10000        # 10k (gesenkt von 50k)
+  hit_playcount: 1000000      # 1M (lowered from 5M)
+  hit_listeners: 100000        # 100k (lowered from 500k)
+  flop_playcount: 100000       # 100k (lowered from 500k)
+  flop_listeners: 10000        # 10k (lowered from 50k)
 
 sample_weights:
   validated: 1.0
@@ -990,14 +990,14 @@ composite_score:
 
 ```yaml
 embedder:
-  model: "m-a-p/MERT-v1-95M"   # Optionen: "m-a-p/MERT-v1-95M" | "m-a-p/MERT-v1-330M"
+  model: "m-a-p/MERT-v1-95M"   # Options: "m-a-p/MERT-v1-95M" | "m-a-p/MERT-v1-330M"
 
-# Optionales Experiment-Label (erscheint im Dateinamen, leer lassen wenn nicht benötigt)
-experiment_label: ""   # z.B. "origparams" → spotilyzer_model_MERTv195M_origparams_validated_*.joblib
+# Optional experiment label (appears in filename, leave blank if not needed)
+experiment_label: ""   # e.g. "origparams" → spotilyzer_model_MERTv195M_origparams_validated_*.joblib
 
-# Per-Embedder XGBoost-Parameter (train_model.py liest zuerst models.<short-name>.params)
-# 95M  (768-dim):  max_depth=6, colsample=0.8 (weniger Overfitting-Gefahr)
-# 330M (1024-dim): max_depth=4, colsample=0.6 (mehr Regularisierung für höhere Dim)
+# Per-embedder XGBoost parameters (train_model.py reads models.<short-name>.params first)
+# 95M  (768-dim):  max_depth=6, colsample=0.8 (less risk of overfitting)
+# 330M (1024-dim): max_depth=4, colsample=0.6 (more regularization for higher dim)
 models:
   MERT-v1-95M:
     params:
@@ -1028,10 +1028,10 @@ models:
       num_class: 3
       eval_metric: "mlogloss"
 
-# Fallback wenn kein per-Embedder-Eintrag vorhanden
+# Fallback when no per-embedder entry exists
 model:
   type: xgboost
-  params: { ... }  # wie MERT-v1-95M
+  params: { ... }  # same as MERT-v1-95M
 
 early_stopping_rounds: 30
 random_state: 42
@@ -1044,154 +1044,154 @@ target_metrics:
 
 ---
 
-## Ziel-Metriken
+## Target Metrics
 
-Alle Werte auf echtem Holdout-Set (20%). Quelle: `evaluation_report_*.json`
+All values on real holdout set (20%). Source: `evaluation_report_*.json`
 
-### Session 5 — main + spotify_charts + kworb (~8960 validated, 1173 Holdout)
+### Session 5 — main + spotify_charts + kworb (~8960 validated, 1173 holdout)
 
-| Metrik | 330M | Ziel |
-|--------|------|------|
+| Metric | 330M | Target |
+|--------|------|--------|
 | Flop Recall | **68.7%** ✓ | ≥ 50% |
 | Hit Recall | **72.8%** ✗ | ≥ 80% |
 | Balanced Accuracy | **63.0%** ✗ | ≥ 65% |
 
-### Session 4 — main + spotify_charts (5660 validated, 1132 Holdout) — Referenz
+### Session 4 — main + spotify_charts (5660 validated, 1132 holdout) — Reference
 
-| Metrik | 95M | 330M | Ziel |
-|--------|-----|------|------|
+| Metric | 95M | 330M | Target |
+|--------|-----|------|--------|
 | Flop Recall | 68.7% ✓ | 69.2% ✓ | ≥ 50% |
 | Hit Recall | 47.7% ✗ | 55.1% ✗ | ≥ 80% |
 | Balanced Accuracy | 57.4% ✗ | 60.9% ✗ | ≥ 65% |
 
-### Session 3 — main only (5262 validated, 967 Holdout) — Referenz
+### Session 3 — main only (5262 validated, 967 holdout) — Reference
 
-| Metrik | 95M_orig | 95M_tuned | 330M_tuned |
+| Metric | 95M_orig | 95M_tuned | 330M_tuned |
 |--------|----------|-----------|------------|
 | Flop Recall | 69.2% | 68.9% | 71.1% |
 | Hit Recall | 24.8% | 27.3% | 37.5% |
 | Balanced Accuracy | 52.6% | 53.2% | 57.5% |
 
-**Flop Recall-Ziel erreicht.** Hit Recall: je +~2500 Hits → +17–18pp. Trend stabil über 3 Sessions. Letzter Schritt bis ≥80%: weiteres Datenwachstum oder Hyperparameter-Tuning.
+**Flop Recall target reached.** Hit Recall: each +~2500 Hits → +17–18pp. Trend stable over 3 sessions. Last step to ≥80%: further data growth or hyperparameter tuning.
 
 ---
 
-## Offene Aufgaben
+## Open Tasks
 
-### Kurzfristig (nächste Session)
-- [ ] **Strategische Entscheidung Inferenz-Ansatz:** Option A (Single-Clip Energie-Max), B (Volltracks), C (Mismatch akzeptieren) oder D (zwei Scores) — siehe Session-9-Befund
-- [ ] Eigene Bibliothek (~200k Songs) auf Eignung als Trainingsdaten prüfen (geschätzt: wenig geeignet, 80% Rock/Metal, überwiegend alt)
+### Short-term (next session)
+- [ ] **Strategic decision on inference approach:** Option A (single-clip energy-max), B (full tracks), C (accept mismatch) or D (two scores) — see Session 9 finding
+- [ ] Check private library (~200k songs) for suitability as training data (estimated: not suitable, 80% Rock/Metal, mostly old)
 
 
-- [x] ~~95M Embeddings extrahieren~~ ✅ (2026-03-17, 8738 Samples)
-- [x] ~~95M Neutraining~~ ✅ (MERTv195M_20260317, BA=47.8% — schlechter als 330M)
-- [x] ~~Recon-Lauf~~ ✅ (2026-03-18, alle validated + suspicious Charts geprüft)
-- [x] ~~Suspicious-Entscheidungen~~ ✅ AR/CL/PT → excluded; KR/TH bleiben suspicious
-- [x] ~~Scouting-Lauf~~ ✅ (2026-03-18, --min-rank 600000, bestehende Cluster)
-- [x] ~~Embeddings --append~~ ✅ (2026-03-18, 56 neue Tracks, beide Modelle)
-- [x] ~~Training auf neuem Datensatz~~ ✅ (2026-03-18, alle drei Modelle, --validated-only)
-- [x] ~~spotify_charts-Modul~~ ✅ (2026-03-19, scout_spotify.py + --dataset-Flag in allen Skripten)
-- [x] ~~Training + Eval auf main+spotify_charts~~ ✅ (2026-03-19, 330M: BA=60.9%, Hit R.=55.1%)
-- [x] ~~evaluate.py --dataset-Flag + Autodetect-Fix~~ ✅ (2026-03-19)
-- [x] ~~`models/MODEL_COMPARISON.md` in Spotilyzer aktualisieren~~ ✅ (2026-03-19, Session 6)
-- [ ] `compute_labels.py` Bug 3 fixen: Dissent-Logik schickt Widersprüche zu "mid" statt "contested"
-- [x] ~~kworb-Modul implementieren~~ ✅ (scout_kworb.py + Checkpoint-System, 2026-03-19)
-- [x] ~~Training + Eval auf main+spotify_charts+kworb~~ ✅ (330M: BA=63.0%, Hit R.=72.8%, 2026-03-19)
-- [x] ~~kworb auf 12 Märkte erweitern~~ ✅ (fr/au/ca/it/se/nl, Bug-Fix HIT_THRESHOLDS, 2026-03-19)
-- [x] ~~Hit Recall ≥80% erreichen~~ ✅ (82.5%, Session 6, 2026-03-19)
-- [x] ~~Balancing-Experimente (expA/B/C/Dim)~~ ✅ (2026-03-20) — kein Experiment schlägt Baseline; expDim-Befund: sweet spot max_depth=5 (zwischen 4 und 6)
+- [x] ~~Extract 95M embeddings~~ ✅ (2026-03-17, 8738 samples)
+- [x] ~~95M retraining~~ ✅ (MERTv195M_20260317, BA=47.8% — worse than 330M)
+- [x] ~~Recon run~~ ✅ (2026-03-18, all validated + suspicious charts checked)
+- [x] ~~Suspicious decisions~~ ✅ AR/CL/PT → excluded; KR/TH remain suspicious
+- [x] ~~Scouting run~~ ✅ (2026-03-18, --min-rank 600000, existing clusters)
+- [x] ~~Embeddings --append~~ ✅ (2026-03-18, 56 new tracks, both models)
+- [x] ~~Training on new dataset~~ ✅ (2026-03-18, all three models, --validated-only)
+- [x] ~~spotify_charts module~~ ✅ (2026-03-19, scout_spotify.py + --dataset flag in all scripts)
+- [x] ~~Training + eval on main+spotify_charts~~ ✅ (2026-03-19, 330M: BA=60.9%, Hit R.=55.1%)
+- [x] ~~evaluate.py --dataset flag + autodetect fix~~ ✅ (2026-03-19)
+- [x] ~~Update `models/MODEL_COMPARISON.md` in Spotilyzer~~ ✅ (2026-03-19, Session 6)
+- [ ] Fix `compute_labels.py` Bug 3: Dissent logic sends contradictions to "mid" instead of "contested"
+- [x] ~~Implement kworb module~~ ✅ (scout_kworb.py + checkpoint system, 2026-03-19)
+- [x] ~~Training + eval on main+spotify_charts+kworb~~ ✅ (330M: BA=63.0%, Hit R.=72.8%, 2026-03-19)
+- [x] ~~Expand kworb to 12 markets~~ ✅ (fr/au/ca/it/se/nl, bug fix HIT_THRESHOLDS, 2026-03-19)
+- [x] ~~Reach Hit Recall ≥80%~~ ✅ (82.5%, Session 6, 2026-03-19)
+- [x] ~~Balancing experiments (expA/B/C/Dim)~~ ✅ (2026-03-20) — no experiment beats baseline; expDim finding: sweet spot max_depth=5 (between 4 and 6)
 
-### Modul-System: Kworb-Scraper (abgeschlossen)
+### Module System: Kworb Scraper (completed)
 
-**Status:** ✅ scout_kworb.py implementiert und erfolgreich gelaufen (2026-03-19).
+**Status:** ✅ scout_kworb.py implemented and successfully run (2026-03-19).
 
-**Ergebnis:** 2738 Tracks, 2497 Hits, alle Embeddings bereits vorhanden. Training lieferte BA=63.0%, Hit R.=72.8%.
+**Result:** 2738 tracks, 2497 Hits, all embeddings already present. Training delivered BA=63.0%, Hit R.=72.8%.
 
-**Offene Todos (nice-to-have):**
-- [ ] `enrich_isrc.py` — Background-Skript: ISRC für `isrc: null`-Tracks via MusicBrainz nachfüllen (aktuell `--skip-mb` genutzt)
-- [ ] `configs/datasets/kworb.yaml` — Markt-Liste, Tier-Gewichte, Hit-Thresholds (aktuell hardcoded in scout_kworb.py)
+**Open todos (nice-to-have):**
+- [ ] `enrich_isrc.py` — background script: fill ISRC for `isrc: null` tracks via MusicBrainz (currently using `--skip-mb`)
+- [ ] `configs/datasets/kworb.yaml` — market list, tier weights, hit thresholds (currently hardcoded in scout_kworb.py)
 
-### Cluster-Erweiterungsplanung (Deezer — niedrige Priorität)
-- [x] ~~`recon_clusters.py` laufen lassen~~ ✅ (2026-03-18)
-- [x] ~~AR, CL, PT~~ ✅ → excluded (manipuliert/Spam)
-- [ ] KR, TH: gezielter Recon-Lauf (`--charts KR TH`) → dann entscheiden (nach kworb_deezer)
-- [ ] `clusters_recon.yaml`: DE/US/UK/FR/BR/ES/JP/GLOBAL mit `playlist_id` ergänzen
-- [ ] Tier-Einteilung auf Basis Overlap/Rank-Daten finalisieren
+### Cluster Expansion Planning (Deezer — low priority)
+- [x] ~~Run `recon_clusters.py`~~ ✅ (2026-03-18)
+- [x] ~~AR, CL, PT~~ ✅ → excluded (manipulated/spam)
+- [ ] KR, TH: targeted recon run (`--charts KR TH`) → then decide (after kworb_deezer)
+- [ ] `clusters_recon.yaml`: Add `playlist_id` for DE/US/UK/FR/BR/ES/JP/GLOBAL
+- [ ] Finalize tier assignment based on overlap/rank data
 
-### Mittelfristig
-- [x] ~~Mehr Hit-Samples: Ziel ≥2000 validated Hits~~ ✅ (~3700 Hits, Session 5)
-- [ ] Genre-balanced Sampling evaluieren
-- [ ] LightGBM als Alternative testen
-- [ ] `configs/thresholds.yaml` — Last.fm-Schwellenwerte kalibrieren (oder via Modul-System obsolet)
-- [ ] Bestehende CSV-Daten in `scout_results/` → JSONL migrieren (einmalig, optional)
+### Medium-term
+- [x] ~~More Hit samples: target ≥2000 validated Hits~~ ✅ (~3700 Hits, Session 5)
+- [ ] Evaluate genre-balanced sampling
+- [ ] Test LightGBM as alternative
+- [ ] `configs/thresholds.yaml` — calibrate Last.fm thresholds (or made obsolete via module system)
+- [ ] Migrate existing CSV data in `scout_results/` → JSONL (one-time, optional)
 
-### Erledigt
-- [x] spotify_charts-Modul: scout_spotify.py, download_previews.py --dataset, extract_embeddings.py --dataset, train_model.py --dataset, evaluate.py --dataset
-- [x] evaluate.py Autodetect-Fix: Glob *validated* statt _validated_ (matcht main+spotify_charts)
-- [x] JSONL-Refactoring (statt CSV/pandas)
-- [x] MD5-Sharding für Previews
-- [x] 7 neue Genre-Cluster (23 gesamt)
-- [x] Radio-Scouting in `scout_deezer.py`
-- [x] `scripts/utils/` mit `paths.py`, `playlist.py`, `metadata.py`
-- [x] Label-swap-bug fix (alphabetical LabelEncoder → target_names korrekt)
+### Done
+- [x] spotify_charts module: scout_spotify.py, download_previews.py --dataset, extract_embeddings.py --dataset, train_model.py --dataset, evaluate.py --dataset
+- [x] evaluate.py autodetect fix: Glob *validated* instead of _validated_ (matches main+spotify_charts)
+- [x] JSONL refactoring (instead of CSV/pandas)
+- [x] MD5 sharding for previews
+- [x] 7 new genre clusters (23 total)
+- [x] Radio scouting in `scout_deezer.py`
+- [x] `scripts/utils/` with `paths.py`, `playlist.py`, `metadata.py`
+- [x] Label swap bug fix (alphabetical LabelEncoder → target_names correct)
 - [x] compute_sample_weight("balanced") × robustness weights
-- [x] Embedding-Checkpoint/Resume-System (--resume, alle 500 Tracks)
-- [x] `--append`-Flag in `extract_embeddings.py` (nur neue Tracks embedden, bestehende überspringen)
-- [x] Modell-Auswahl in run_pipeline.py (interaktives Menü + --model CLI-Flag)
-- [x] `--embedder`-Flag in train_model.py und evaluate.py
-- [x] Embedder-Unterordner in outputs/embeddings/ (MERT-v1-95M/ vs MERT-v1-330M/)
-- [x] Modell-Naming-Schema: spotilyzer_model_{embedder}_{date}.joblib
-- [x] 8738-Sample-Datensatz (DE, US, UK, FR, BR, ES Charts + Genre-Cluster)
-- [x] 330M-Modell trainiert und evaluiert (MERTv1330M_20260317)
-- [x] MODEL_COMPARISON.md Cheat-Sheet erstellt
-- [x] Chart-Discovery via analyze_clusters.py durchgeführt
-- [x] recon_clusters.py + clusters_recon.yaml erstellt
-- [x] Chart-Kategorisierung: 22 validated, 2 suspicious (KR/TH), 7 excluded (AR/CL/PT/TR/AE/NZ/IN)
-- [x] scout_kworb.py: Kworb _weekly_totals, 6 Märkte, Checkpoint-System, Miss-Cache, ISRC-Cache
-- [x] Modell deployed: spotilyzer_model_MERTv1330M_main+spotify_charts+kworb_validated_20260319.joblib
+- [x] Embedding checkpoint/resume system (--resume, every 500 tracks)
+- [x] `--append` flag in `extract_embeddings.py` (embed only new tracks, skip existing)
+- [x] Model selection in run_pipeline.py (interactive menu + --model CLI flag)
+- [x] `--embedder` flag in train_model.py and evaluate.py
+- [x] Embedder subdirectories in outputs/embeddings/ (MERT-v1-95M/ vs MERT-v1-330M/)
+- [x] Model naming scheme: spotilyzer_model_{embedder}_{date}.joblib
+- [x] 8738-sample dataset (DE, US, UK, FR, BR, ES charts + genre clusters)
+- [x] 330M model trained and evaluated (MERTv1330M_20260317)
+- [x] MODEL_COMPARISON.md cheat sheet created
+- [x] Chart discovery via analyze_clusters.py performed
+- [x] recon_clusters.py + clusters_recon.yaml created
+- [x] Chart categorization: 22 validated, 2 suspicious (KR/TH), 7 excluded (AR/CL/PT/TR/AE/NZ/IN)
+- [x] scout_kworb.py: Kworb _weekly_totals, 6 markets, checkpoint system, miss cache, ISRC cache
+- [x] Model deployed: spotilyzer_model_MERTv1330M_main+spotify_charts+kworb_validated_20260319.joblib
 
-### Langfristig
-- [ ] YouTube Views als dritte Quelle
-- [ ] Genre-spezifische Modelle
-- [ ] Test auf KI-generierten Tracks (Mureka, Suno)
+### Long-term
+- [ ] YouTube views as third source
+- [ ] Genre-specific models
+- [ ] Test on AI-generated tracks (Mureka, Suno)
 
 ---
 
 ## Hardware
 
-**Aktuell:** GTX 1660 Ti (6 GB VRAM)
-**Geplant:** Upgrade auf 16+ GB
+**Current:** GTX 1660 Ti (6 GB VRAM)
+**Planned:** Upgrade to 16+ GB
 
-**Relevanz für Training:**
-- MERT-Embedding-Berechnung: ~2 GB VRAM
-- XGBoost/LightGBM Training: CPU-basiert, VRAM irrelevant
-- UMAP-Visualisierung: CPU, bei großen Datensätzen RAM-intensiv
+**Relevance for training:**
+- MERT embedding computation: ~2 GB VRAM
+- XGBoost/LightGBM training: CPU-based, VRAM irrelevant
+- UMAP visualization: CPU, RAM-intensive for large datasets
 
 ---
 
-## Referenzen
+## References
 
-### Obsidian-Referenzsystem (ab Session 3)
+### Obsidian Reference System (from Session 3)
 
-Pfad: `D:\Software\Tools\Obsidian Vaults\AV-Obsidian\Projekte\Spotilyzer\`
+Path: `D:\Software\Tools\Obsidian Vaults\AV-Obsidian\Projekte\Spotilyzer\`
 
-| Datei/Ordner | Inhalt |
+| File/Folder | Content |
 |---|---|
-| `Master.md` | Zentrale Navigation (Indices, curated Docs, Logs) |
-| `Reference_Docs\curated\2026-03-18\Chart-Datenquellen_für_Modul-System.md` | ⭐ Arbeitsgrundlage kworb_deezer |
-| `Indices\2026-03-18\` | Gliederungen der drei Original-Recherchen (ChatGPT × 2, Gemini) |
-| `Reference_Docs\original\2026-03-18\` | Vollständige ChatGPT/Gemini Deep-Dive-Outputs |
+| `Master.md` | Central navigation (indices, curated docs, logs) |
+| `Reference_Docs\curated\2026-03-18\Chart-Datenquellen_für_Modul-System.md` | ⭐ Working basis for kworb_deezer |
+| `Indices\2026-03-18\` | Outlines of three original research pieces (ChatGPT × 2, Gemini) |
+| `Reference_Docs\original\2026-03-18\` | Complete ChatGPT/Gemini deep-dive outputs |
 
-### Projekt-Dokumente (Hauptprojekt)
-- `Spotilyzer/CLAUDE.md` — Hauptprojekt-Dokumentation
-- `Spotilyzer/!BU/Spotilyzer_GenAI_Encoder_Analysis.md` — CLAP/HeartCLAP-Analyse
-- `Spotilyzer/!BU/UVR_Index_for_Spotilyzer.md` — Stem-Separation-Optionen
+### Project Documents (Main Project)
+- `Spotilyzer/CLAUDE.md` — Main project documentation
+- `Spotilyzer/!BU/Spotilyzer_GenAI_Encoder_Analysis.md` — CLAP/HeartCLAP analysis
+- `Spotilyzer/!BU/UVR_Index_for_Spotilyzer.md` — Stem separation options
 
-### Externe
+### External
 - [Last.fm API Docs](https://www.last.fm/api)
 - [pylast (Python Last.fm Client)](https://github.com/pylast/pylast)
 - [Deezer API Docs](https://developers.deezer.com/api)
-- [Kworb.net](https://kworb.net) — Spotify Top 200 Charts, täglich/kumuliert
-- [MusicBrainz API](https://musicbrainz.org/doc/MusicBrainz_API) — ISRC-Lookup (1 req/s)
+- [Kworb.net](https://kworb.net) — Spotify Top 200 Charts, daily/cumulative
+- [MusicBrainz API](https://musicbrainz.org/doc/MusicBrainz_API) — ISRC lookup (1 req/s)
 - [XGBoost sample_weight](https://xgboost.readthedocs.io/en/stable/python/python_api.html)
-- [mutagen (ID3-Tagging)](https://mutagen.readthedocs.io/)
+- [mutagen (ID3 tagging)](https://mutagen.readthedocs.io/)

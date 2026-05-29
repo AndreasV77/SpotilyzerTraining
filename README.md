@@ -1,30 +1,30 @@
 # SpotilyzerTraining
 
-Datenakquise, Labeling und Modell-Training für den **Spotilyzer** Hit/Mid/Flop-Klassifikator.
+Data acquisition, labeling, and model training for the **Spotilyzer** Hit/Mid/Flop classifier.
 
-Dieses Repository ist das Training-Subprojekt von [Spotilyzer](https://github.com/AndreasV77/Spotilyzer). Es produziert ein trainiertes XGBoost-Modell, das anschließend ins Hauptprojekt übertragen wird.
+This repository is the training sub-project of [Spotilyzer](https://github.com/AndreasV77/Spotilyzer). It produces a trained XGBoost model that is subsequently transferred to the main project.
 
 ---
 
-## Aktueller Modellstand
+## Current Model Status
 
-Holdout-Set: 1173 Samples (20% aus ~8960 validated). Stand: 2026-03-19.
+Holdout set: 1173 samples (20% from ~8960 validated). As of 2026-03-19.
 
-| Modell | BA | Hit R. | Flop R. |
-|--------|-----|--------|---------|
+| Model | BA | Hit R. | Flop R. |
+|--------|-----|--------|------|
 | `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | **63.0%** | **72.8%** | 68.7% |
 | `MERTv1330M_main+spotify_charts_validated_20260319` | 60.9% | 55.1% | 69.2% |
 
-**Ziele:** Flop Recall ≥ 50% ✓ — Hit Recall ≥ 80% (72.8%, in Arbeit) — BA ≥ 65% (63.0%, in Arbeit)
+**Goals:** Flop Recall ≥ 50% ✓ — Hit Recall ≥ 80% (72.8%, in progress) — BA ≥ 65% (63.0%, in progress)
 
 ---
 
-## Voraussetzungen
+## Prerequisites
 
 - Python 3.10+
-- [Last.fm API Key](https://www.last.fm/api/account/create) (kostenlos)
-- GPU empfohlen für MERT-Embedding-Extraktion (~2 GB VRAM)
-- Ca. 10–20 GB Speicherplatz für Audio-Previews
+- [Last.fm API Key](https://www.last.fm/api/account/create) (free)
+- GPU recommended for MERT embedding extraction (~2 GB VRAM)
+- Approximately 10–20 GB storage for audio previews
 
 ---
 
@@ -44,7 +44,7 @@ pip install xgboost scikit-learn
 pip install jupyter matplotlib seaborn   # optional
 
 Copy-Item .env.example .env
-# .env editieren: LASTFM_API_KEY=dein_key
+# Edit .env: LASTFM_API_KEY=your_key
 
 New-Item -ItemType Directory -Force -Path "G:\Dev\SpotilyzerData\previews"
 New-Item -ItemType Directory -Force -Path "G:\Dev\SpotilyzerData\metadata"
@@ -55,30 +55,30 @@ New-Item -ItemType Directory -Force -Path "G:\Dev\SpotilyzerData\datasets"
 
 ## Pipeline
 
-### Haupt-Pipeline (Deezer-Scouting)
+### Main Pipeline (Deezer Scouting)
 
 ```
-scout_deezer.py       →  metadata/tracks.jsonl  (Track-IDs, Ranks, Cluster)
-download_previews.py  →  previews/{shard}/*.mp3  (30s-Previews, MD5-Sharding)
+scout_deezer.py       →  metadata/tracks.jsonl  (Track IDs, Ranks, Cluster)
+download_previews.py  →  previews/{shard}/*.mp3  (30s previews, MD5 sharding)
 enrich_lastfm.py      →  tracks.jsonl  (+ playcount, listeners, tags)
 compute_labels.py     →  tracks.jsonl  (+ label, robustness)
 ```
 
-### Modul-Pipeline (Spotify Charts)
+### Module Pipeline (Spotify Charts)
 
 ```
 scout_spotify.py      →  datasets/spotify_charts/tracks.jsonl
 download_previews.py --dataset spotify_charts  →  previews/ (shared)
 ```
 
-### Modul-Pipeline (Kworb — historische Charts)
+### Module Pipeline (Kworb — Historical Charts)
 
 ```
 scout_kworb.py        →  datasets/kworb/tracks.jsonl
 download_previews.py --dataset kworb  →  previews/ (shared)
 ```
 
-### Gemeinsame Pipeline (ab Embeddings)
+### Shared Pipeline (from Embeddings)
 
 ```
 extract_embeddings.py [--model 95M|330M] [--dataset kworb --append]
@@ -86,13 +86,13 @@ train_model.py        [--embedder 330M] [--dataset main spotify_charts kworb] [-
 evaluate.py           [--embedder 330M] [--dataset main spotify_charts kworb] [--validated-only] [--save-report]
 ```
 
-### Starten
+### Running
 
 ```powershell
-# Interaktives Menü
+# Interactive menu
 python scripts/run_pipeline.py
 
-# Direkte Befehle:
+# Direct commands:
 python scripts/scout_kworb.py --dry-run
 python scripts/scout_kworb.py --min-streams 20000000 --max-tracks 3000 --skip-mb
 python scripts/scout_spotify.py --input-dir G:/Dev/SpotilyzerData/spotify/YYYY-MM-DD
@@ -102,22 +102,22 @@ python scripts/evaluate.py --embedder 330M --dataset main spotify_charts --valid
 
 ---
 
-## Datenquellen
+## Data Sources
 
-| Quelle | Zweck | Auth |
-|--------|-------|------|
-| [Deezer API](https://developers.deezer.com/api) | Audio-Previews + Popularity-Rank | keine |
-| [Last.fm API](https://www.last.fm/api) | Playcount + Listeners (Validierung) | API-Key |
-| [Spotify Charts](https://charts.spotify.com) | Top 200 Charts CSV (manuell) | Login |
-| [Kworb.net](https://kworb.net) | Historische Chart-Daten (peak, weeks) | keine |
-| [MusicBrainz API](https://musicbrainz.org/doc/MusicBrainz_API) | ISRC-Lookup (1 req/s) | keine |
+| Source | Purpose | Auth |
+|--------|---------|------|
+| [Deezer API](https://developers.deezer.com/api) | Audio previews + popularity rank | none |
+| [Last.fm API](https://www.last.fm/api) | Playcount + Listeners (validation) | API key |
+| [Spotify Charts](https://charts.spotify.com) | Top 200 Charts CSV (manual) | Login |
+| [Kworb.net](https://kworb.net) | Historical chart data (peak, weeks) | none |
+| [MusicBrainz API](https://musicbrainz.org/doc/MusicBrainz_API) | ISRC lookup (1 req/s) | none |
 
 ---
 
-## Genre-Cluster (23)
+## Genre Clusters (23)
 
-| Gruppe | Cluster |
-|--------|---------|
+| Group | Clusters |
+|--------|----------|
 | Metal (7) | extreme_metal, gothic, heavy_metal, power_symphonic, modern_metal, metalcore, crossover |
 | Rock (5) | hard_rock, mainstream_rock, modern_rock, classic_southern_rock, alternative_rock |
 | Punk/Hardcore (2) | punk, hardcore |
@@ -132,22 +132,22 @@ python scripts/evaluate.py --embedder 330M --dataset main spotify_charts --valid
 
 ---
 
-## Datenstruktur
+## Data Structure
 
-Audiodateien und Metadaten werden **außerhalb des Repos** gespeichert (`G:/Dev/SpotilyzerData/`):
+Audio files and metadata are stored **outside the repo** (`G:/Dev/SpotilyzerData/`):
 
 ```
 G:/Dev/SpotilyzerData/
 ├── previews/
-│   └── {md5[:2]}/           # MD5-Sharding (256 Ordner)
+│   └── {md5[:2]}/           # MD5 sharding (256 folders)
 │       └── {track_id}.mp3
 ├── metadata/
-│   └── tracks.jsonl          # Haupt-Datensatz (Deezer-Scouting)
+│   └── tracks.jsonl          # Main dataset (Deezer scouting)
 ├── datasets/
 │   ├── spotify_charts/
 │   │   └── tracks.jsonl      # Spotify Top 200 Charts
 │   └── kworb/
-│       └── tracks.jsonl      # Kworb historische Charts
+│       └── tracks.jsonl      # Kworb historical charts
 └── spotify/
     └── {YYYY-MM-DD}/
         └── regional-{country}-weekly-{date}.csv
@@ -157,7 +157,7 @@ G:/Dev/SpotilyzerData/
 
 ## Deployment
 
-Nach erfolgreichem Training das Modell ins Hauptprojekt übertragen:
+After successful training, transfer the model to the main project:
 
 ```powershell
 Copy-Item outputs/models/spotilyzer_model_MERTv1330M_*_validated_*.joblib ..\Spotilyzer\models\
@@ -166,6 +166,6 @@ Copy-Item outputs/reports/training_report_MERTv1330M_*_validated_*.json   ..\Spo
 
 ---
 
-## Verwandte Repos
+## Related Repos
 
-- [Spotilyzer](https://github.com/AndreasV77/Spotilyzer) — GUI, CLI, Analyse-Pipeline
+- [Spotilyzer](https://github.com/AndreasV77/Spotilyzer) — GUI, CLI, analysis pipeline
