@@ -513,8 +513,6 @@ python scripts/recon_clusters.py --dry-run
 | `suspicious` | Potentially manipulated — requires manual decision |
 | `excluded` | Not usable (outdated, user-curated, API bug) |
 
-**Known limitation:** The `existing` charts (DE, US, UK, FR, BR, ES, JP, GLOBAL) have no `playlist_id` in `clusters_recon.yaml` — they are skipped by recon even with `--scope all`. They should be supplemented with playlist IDs for a complete analysis.
-
 **Spam detection thresholds** (from `recon_settings` in `clusters_recon.yaml`):
 - Single-artist dominance > 30% → warning
 - Artist diversity < 0.5 → warning
@@ -1131,7 +1129,7 @@ All values on real holdout set (20%). Source: `evaluation_report_*.json`
 - [x] ~~Run `recon_clusters.py`~~ ✅ (2026-03-18)
 - [x] ~~AR, CL, PT~~ ✅ → excluded (manipulated/spam)
 - [ ] KR, TH: targeted recon run (`--charts KR TH`) → then decide (after kworb_deezer)
-- [ ] `clusters_recon.yaml`: Add `playlist_id` for DE/US/UK/FR/BR/ES/JP/GLOBAL
+
 - [ ] Finalize tier assignment based on overlap/rank data
 
 ### Medium-term
