@@ -1105,7 +1105,7 @@ All values on real holdout set (20%). Source: `evaluation_report_*.json`
 ## Open Tasks
 
 ### Short-term (next session)
-- [ ] **Spotilyzer inference change:** `predictor.py` / `embedder.py` — per-chunk XGBoost + mean(probabilities) instead of mean-pool embeddings → XGBoost once. See Session 10 decision.
+- [x] ~~**Spotilyzer inference change:**~~ ✅ (2026-05-29) `process_file_chunks()` + `predict_chunks()` in embedder/predictor, pipeline updated. Commit `aebb131`.
 - [ ] **CLAP second score (Spotilyzer):** Optional setting in GUI — show CLAP full-track mood/genre score alongside hit potential
 - [ ] Check private library (~200k songs) for suitability as training data (estimated: not suitable, 80% Rock/Metal, mostly old)
 
