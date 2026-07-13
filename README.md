@@ -8,14 +8,15 @@ This repository is the training sub-project of [Spotilyzer](https://github.com/A
 
 ## Current Model Status
 
-Holdout set: 4545 samples (20% from ~22,722 validated). As of 2026-03-19.
+Holdout set: 4545 samples (20% from ~22,722 validated). As of 2026-05-29.
 
-| Model | BA | Hit R. | Flop R. |
-|--------|-----|--------|------|
-| `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | **64.2%** | **82.5%** | 73.5% |
-| `MERTv1330M_main+spotify_charts_validated_20260319` | 60.9% | 55.1% | 69.2% |
+| Model | BA | Hit R. | Flop R. | Status |
+|--------|-----|--------|------|----|
+| `MERTv1330M_main+spotify_charts+kworb_validated_20260529` | **63.0%** | **86.9%** | 67.5% | **Default** (depth=5) |
+| `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | **64.2%** | **82.5%** | 73.5% | Alternative (depth=4, BA-optimal) |
+| `MERTv1330M_main+spotify_charts_validated_20260319` | 60.9% | 55.1% | 69.2% | Predecessor |
 
-**Goals:** Flop Recall ≥ 50% ✓ — Hit Recall ≥ 80% ✓ (82.5%) — BA ≥ 65% (64.2%, in progress)
+**Goals:** Flop Recall ≥ 50% ✓ — Hit Recall ≥ 80% ✓ (86.9%) — BA ≥ 65% (63.0%, in progress)
 
 ---
 
