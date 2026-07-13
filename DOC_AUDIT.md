@@ -54,6 +54,36 @@ For each document, in hierarchy order (1 → 4):
    `ID | found-date | file | defect | OPEN`
    State the defect only — what is wrong, not how to fix it.
 
+### Repo hygiene (also part of this pass)
+
+Not a documentation defect in the narrow sense, but the same read-only rule applies:
+find it, log it to `ERRATA.md`, do not touch it. Reason this belongs here: an
+accidental local deletion followed by "recovery" from the remote/web repo silently
+resurrects whatever bad state the remote happens to have — a detached HEAD, a
+tracked file that should never have been tracked, or unpushed local work that the
+remote never saw in the first place. Cheap to catch, expensive to discover by
+accident later. Check, per repo:
+
+- **Branch attachment** — is HEAD attached to a branch, not detached
+  (`git branch --show-current` / `git status`)? A detached HEAD means the next
+  commit risks becoming unreachable the moment someone checks out a branch.
+- **Sync state** — local vs. `origin`: ahead, behind, or diverged
+  (`git status -sb`, `git rev-list --count origin/main..main` and the reverse)?
+  Unpushed commits are invisible to anything reading only the remote (a GitHub
+  connector, a fresh clone) and are exactly what an accidental-recovery scenario
+  would lose.
+- **Tracked-file / .gitignore gaps** — any file under version control that an
+  ignore pattern was clearly meant to exclude but doesn't (e.g. a glob that
+  doesn't match a subdirectory)? Check with `git ls-files` against the intent of
+  `.gitignore`, not just its literal patterns. Large or generated binaries
+  slipping into tracked history are the concrete risk.
+- **Working tree cleanliness** — `git status`: anything uncommitted sitting
+  around across sessions that shouldn't be?
+
+Log each finding the same way as a doc defect (same `ERRATA.md`, same ID
+prefix) — the `file` column can name a path, a glob pattern, or just "git state"
+if there's no single file to point at.
+
 The pass ends when all documents are checked. Nothing has been edited.
 
 If the audit was prompted as part of a larger request, it still ends here.
@@ -69,7 +99,11 @@ is not also hunting for new defects.
 
 1. Re-verify the top OPEN entry against the current file (it may already be
    resolved, or the file may have moved on since the audit).
-2. Make exactly one edit that resolves exactly that one defect.
+2. Resolve exactly that one defect — one file edit for a doc defect, or the
+   equivalent single git operation for a repo-hygiene finding (reattach a
+   branch, push, `git rm --cached` + fix the ignore pattern). Confirm the
+   before-state first (e.g. check the remote hasn't moved since the audit)
+   rather than assuming it's still accurate.
 3. Add one line to `CHANGELOG.md`.
 4. Mark the entry FIXED (date) in `ERRATA.md`. Do not delete the row.
 5. Next entry.
@@ -84,6 +118,8 @@ acted on now.
 
 Audit:   "Run a read-only documentation audit per DOC_AUDIT.md. Log defects to
           ERRATA.md. Do not fix anything, do not propose solutions."
+         (This already includes the repo-hygiene checks — they're part of the
+         audit pass, not a separate ask.)
 Fix:     "Run a fix pass per DOC_AUDIT.md: work ERRATA.md top to bottom, one edit
           per defect, one CHANGELOG line each, mark FIXED. Do not hunt for new
           defects."
