@@ -2,8 +2,12 @@
 
 Working document for the model training sub-project of Spotilyzer.
 
+## Documentation Workflow
+
+Doc consistency is maintained via a read-only **audit** → `ERRATA.md` → separate **fix pass** cycle, defined in `DOC_AUDIT.md`. Before fixing any defect referenced by ID (e.g. "SP-011"), read `DOC_AUDIT.md` for the rules and `ERRATA.md` for the defect. Log every fix as one line in `CHANGELOG.md`.
+
 **Created:** 2026-03-07
-**Last updated:** 2026-05-29 (Session 10: Inference approach decided. Fresh training run → _20260529 (BA 63.0%, Hit R. 86.9%). _20260529 = default, _20260319 = alternative.)
+**Last updated:** 2026-07-13 (Session 11: enrich_isrc.py built + verified — resumable ISRC backfill, MB helpers factored into utils/musicbrainz.py. Kworb + Spotify Charts refresh scan started, ~2-3 month cadence.)
 
 **Important rule:** Always update CLAUDE.md after completed steps — never write based on ongoing or planned results. Always read metrics from reports, never estimate them.
 
@@ -83,13 +87,13 @@ Improving the Hit/Mid/Flop classifier for Spotilyzer.
 
 ### Current Model Status (as of 2026-05-29, source: evaluation_reports)
 
-All metrics on real holdout set (20%). Dataset: validated-only.
+All metrics on real holdout set (20%). Dataset: validated-only. **Note:** each holdout sample is one 30s clip (one Deezer preview). Song-level evaluation (averaging chunk probabilities across a full track) is still pending.
 
 | Model | Dataset | Holdout | BA | Hit R. | Flop R. | Status |
 |--------|---------|---------|-----|--------|---------|--------|
 | `MERTv1330M_main+spotify_charts+kworb_validated_20260529` | ~22,722 val. | 4545 | 63.0% | **86.9%** | 67.5% | **Default** (depth=5, Session 10) |
 | `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~22,722 val. | 4545 | **64.2%** | 82.5% | **73.5%** | **Alternative** (depth=4, BA-Optimum) |
-| (Session 5) `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~8960 val. | 1173 | 63.0% | 72.8% | 68.7% | Superseded |
+| (Session 5) `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~8960 val. | 1173 | 63.0% | 72.8% | 68.7% | Superseded — file overwritten by Session 6 retrain with same date stamp; no longer exists |
 | `MERTv1330M_main+spotify_charts_validated_20260319` | 5660 val. | 1132 | 60.9% | 55.1% | 69.2% | Predecessor |
 | `MERTv195M_main+spotify_charts_validated_20260319` | 5660 val. | 1132 | 57.4% | 47.7% | 68.7% | Predecessor |
 | `MERTv1330M_validated_20260318` | 5262 val. | 967 | 57.5% | 37.5% | 71.1% | Predecessor |
@@ -1135,7 +1139,7 @@ All values on real holdout set (20%). Source: `evaluation_report_*.json`
 **Result:** 2738 tracks, 2497 Hits, all embeddings already present. Training delivered BA=63.0%, Hit R.=72.8%.
 
 **Open to-dos (nice-to-have):**
-- [ ] `enrich_isrc.py` — background script: fill ISRC for `isrc: null` tracks via MusicBrainz (currently using `--skip-mb`)
+- [x] ~~`enrich_isrc.py`~~ ✅ (2026-07-13) — resumable background script: fills ISRC for `isrc: null`/missing tracks via MusicBrainz across main+spotify_charts+kworb. Checkpointed (isrc_cache.json per lookup, tracks.jsonl per N), safe to interrupt/resume anytime — designed to run intermittently over days. MB helpers factored into `utils/musicbrainz.py` (shared with scout_kworb.py). ~28,997 tracks were missing ISRC at time of writing; run intermittently, not blocking.
 - [ ] `configs/datasets/kworb.yaml` — market list, tier weights, hit thresholds (currently hardcoded in scout_kworb.py)
 
 ### Cluster Expansion Planning (Deezer — low priority)

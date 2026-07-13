@@ -49,6 +49,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _utils import setup_logging, load_paths_config, ensure_dir
 from utils.metadata import merge_tracks, read_tracks
+from utils.musicbrainz import get_isrc_by_artist_title
 
 # ══════════════════════════════════════════════════════════════════════════════
 # KONFIGURATION
@@ -56,7 +57,6 @@ from utils.metadata import merge_tracks, read_tracks
 
 KWORB_BASE      = "https://kworb.net/spotify/country"
 DEEZER_API_BASE = "https://api.deezer.com"
-MB_API_BASE     = "https://musicbrainz.org/ws/2"
 MB_USER_AGENT   = "SpotilyzerTraining/1.0 (github.com/AndreasV77/SpotilyzerTraining)"
 
 # Phase-1-Märkte (Session 5)
@@ -306,72 +306,8 @@ def compute_chart_score_and_label(chart_entries: list[dict]) -> tuple[float, str
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# MUSICBRAINZ
+# MUSICBRAINZ (siehe utils/musicbrainz.py — get_isrc_by_artist_title, mb_get)
 # ══════════════════════════════════════════════════════════════════════════════
-
-def mb_get(endpoint: str, params: dict = None) -> Optional[dict]:
-    """MusicBrainz API GET. Rate-Limit: 1 req/s."""
-    url = f"{MB_API_BASE}/{endpoint}"
-    headers = {
-        "User-Agent": MB_USER_AGENT,
-        "Accept":     "application/json",
-    }
-    try:
-        resp = requests.get(url, params=params, headers=headers, timeout=15)
-        time.sleep(1.1)
-        if resp.status_code == 200:
-            return resp.json()
-        if resp.status_code == 404:
-            return None
-        logger.warning(f"MusicBrainz HTTP {resp.status_code}: {url}")
-        if resp.status_code == 503:
-            time.sleep(10)
-        return None
-    except requests.exceptions.RequestException as e:
-        logger.error(f"MusicBrainz Fehler: {e}")
-        return None
-
-
-def get_isrc_by_artist_title(artist: str, title: str, cache: dict) -> Optional[str]:
-    """
-    ISRC-Lookup via MusicBrainz Artist+Title-Suche.
-    Cache-Key: "{artist_lower}|||{title_lower}"
-
-    Zwei API-Calls:
-      1. /recording?query=recording:"{title}" AND artist:"{artist}" → MBID
-      2. /recording/{mbid}?inc=isrcs → ISRC
-    """
-    cache_key = f"{artist.lower()}|||{title.lower()}"
-    if cache_key in cache:
-        return cache[cache_key]
-
-    # Schritt 1: Artist+Title → MBID
-    data = mb_get("recording", params={
-        "query": f'recording:"{title}" AND artist:"{artist}"',
-        "fmt":   "json",
-        "limit": 3,
-    })
-
-    mbid = None
-    if data and data.get("recordings"):
-        mbid = data["recordings"][0]["id"]
-
-    if not mbid:
-        cache[cache_key] = None
-        return None
-
-    # Schritt 2: MBID → ISRC
-    data = mb_get(f"recording/{mbid}", params={"inc": "isrcs", "fmt": "json"})
-
-    isrc = None
-    if data:
-        isrcs = data.get("isrcs", [])
-        if isrcs:
-            isrc = isrcs[0]
-
-    cache[cache_key] = isrc
-    return isrc
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # DEEZER (identisch zu scout_spotify.py)
@@ -644,7 +580,7 @@ def main():
         isrc = None
         if not args.skip_mb:
             was_cached = track_key in isrc_cache
-            isrc = get_isrc_by_artist_title(artist, title, isrc_cache)
+            isrc = get_isrc_by_artist_title(artist, title, isrc_cache, logger=logger)
             if was_cached:
                 stats["mb_cached"] += 1
             elif isrc:
