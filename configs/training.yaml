@@ -49,10 +49,16 @@ models:
   MERT-v1-330M:
     params:
       n_estimators: 500
-      max_depth: 5             # Session 8: sweet spot depth=5 (Hit R. 86.9%)
+      max_depth: 4              # Standing choice (2026-07-13): depth=4/col=0.6 is the BA-optimal,
+                                 # deliberate default. Same-day sweep also tried depth=4 with
+                                 # col=0.7/0.8 (slightly better BA/Flop, kept as one-off comparison
+                                 # points) and depth=3/col=0.8 (crosses BA>=65% but Hit R. drops
+                                 # below 80%) and depth=5/col=0.7/0.8 (higher Hit R., lower BA —
+                                 # a taste call, not a technical win). None displaced col=0.6 as
+                                 # the standing default; see outputs/reports for full comparison.
       learning_rate: 0.05
       subsample: 0.8
-      colsample_bytree: 0.8    # depth=5 config from _20260331
+      colsample_bytree: 0.6
       min_child_weight: 3
       gamma: 0.1
       reg_alpha: 0.5

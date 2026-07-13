@@ -7,7 +7,7 @@ Working document for the model training sub-project of Spotilyzer.
 Doc consistency is maintained via a read-only **audit** → `ERRATA.md` → separate **fix pass** cycle, defined in `DOC_AUDIT.md`. Before fixing any defect referenced by ID (e.g. "SP-011"), read `DOC_AUDIT.md` for the rules and `ERRATA.md` for the defect. Log every fix as one line in `CHANGELOG.md`.
 
 **Created:** 2026-03-07
-**Last updated:** 2026-07-13 (Session 11: enrich_isrc.py built + verified — resumable ISRC backfill, MB helpers factored into utils/musicbrainz.py. Kworb + Spotify Charts refresh scan started, ~2-3 month cadence.)
+**Last updated:** 2026-07-13 (Session 11: enrich_isrc.py built + verified. Kworb+Spotify Charts refresh complete (+1,250/+752 tracks, 24,170 validated total). Hyperparameter sweep on fresh data confirms depth=4/col=0.6 as standing default (training.yaml corrected — it had silently drifted to depth=5/col=0.8). Old model/report clutter archived out of both repos to P:\BACKUP\Archive.)
 
 **Important rule:** Always update CLAUDE.md after completed steps — never write based on ongoing or planned results. Always read metrics from reports, never estimate them.
 
@@ -85,14 +85,14 @@ Copy-Item outputs/reports/training_report_MERTv1330M_*.json ..\Spotilyzer\models
 
 Improving the Hit/Mid/Flop classifier for Spotilyzer.
 
-### Current Model Status (as of 2026-05-29, source: evaluation_reports)
+### Current Model Status (as of 2026-05-29, source: evaluation_reports; see Session 11 below for 2026-07-13 sweep on fresh data)
 
 All metrics on real holdout set (20%). Dataset: validated-only. **Note:** each holdout sample is one 30s clip (one Deezer preview). Song-level evaluation (averaging chunk probabilities across a full track) is still pending.
 
 | Model | Dataset | Holdout | BA | Hit R. | Flop R. | Status |
 |--------|---------|---------|-----|--------|---------|--------|
-| `MERTv1330M_main+spotify_charts+kworb_validated_20260529` | ~22,722 val. | 4545 | 63.0% | **86.9%** | 67.5% | **Default** (depth=5, Session 10) |
-| `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~22,722 val. | 4545 | **64.2%** | 82.5% | **73.5%** | **Alternative** (depth=4, BA-Optimum) |
+| `MERTv1330M_main+spotify_charts+kworb_validated_20260529` | ~22,722 val. | 4545 | 63.0% | **86.9%** | 67.5% | **Deployed** (depth=5) — replacement pending, see Session 11 |
+| `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~22,722 val. | 4545 | **64.2%** | 82.5% | **73.5%** | Archived 2026-07-13 → `P:\BACKUP\Archive` (superseded by fresh depth=4/col=0.6 sweep, Session 11) |
 | (Session 5) `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~8960 val. | 1173 | 63.0% | 72.8% | 68.7% | Superseded — file overwritten by Session 6 retrain with same date stamp; no longer exists |
 | `MERTv1330M_main+spotify_charts_validated_20260319` | 5660 val. | 1132 | 60.9% | 55.1% | 69.2% | Predecessor |
 | `MERTv195M_main+spotify_charts_validated_20260319` | 5660 val. | 1132 | 57.4% | 47.7% | 68.7% | Predecessor |
@@ -191,6 +191,21 @@ Each chunk is evaluated as a standalone 30s clip — identical format to trainin
 **Parameter Finding (95M):** Tuned vs. origparams → marginal difference (+0.6% BA). With larger dataset origparams could be more competitive — experiment paused for now, data volume is priority.
 
 **Strategic Consequence:** Hit Recall 72.8% — 7.2pp remaining to target ≥80%. Next step: further data growth (more markets in Kworb, new Spotify Charts snapshots) or hyperparameter tuning.
+
+**Session 11 Finding (2026-07-13): periodic refresh + hyperparameter re-check.** Kworb rescan (18,376→19,626, +1,250) and Spotify Charts resnapshot (960→1,712, +752, now 10 markets incl. au/se) — first refresh since March, ~2-3 month cadence going forward. Dataset now 24,170 validated (+1,448 vs. the 22,722 baseline). Discovered `training.yaml` had silently drifted to depth=5/col=0.8 (undocumented) while CLAUDE.md described depth=4/col=0.6 as current — corrected the file to genuinely match. Re-ran the depth/colsample sweep on fresh data to sanity-check that decision:
+
+| Config | BA | Hit R. | Flop R. |
+|---|---|---|---|
+| depth=5/col=0.8 (old default, refreshed) | 62.2% | 86.5% | 67.7% |
+| depth=5/col=0.7 | 63.1% | 86.3% | 69.6% |
+| depth=4/col=0.6 (standing default) | 64.3% | 82.4% | 74.5% |
+| depth=4/col=0.7 | 64.5% | 82.8% | 74.7% |
+| depth=4/col=0.8 | 64.7% | 82.8% | 75.2% |
+| depth=3/col=0.8 | **65.3%** (first ≥65% BA) | 79.4% | 81.0% |
+
+Confirms Session 8's monotonic depth/colsample-vs-BA trade-off, now extended one step further (depth=3 crosses the BA target but drops Hit Recall below 80% for the first time). No config displaced depth=4/col=0.6 as the standing default — depth=5/col=0.8 (the deployed `_20260529`'s config) is judged a taste call (buys Hit Recall at the cost of BA/Flop Recall/confidence), not a technical improvement. **Which model — if any — replaces the deployed `_20260529` is not yet decided**; all six candidates and their full reports live in `outputs/models/` and `outputs/reports/` (labels `depth4refresh`, `d4c07`, `d4c08`, `d3c08`, `d5c07`, plus the unlabeled depth=5/col=0.8 refresh).
+
+**Repo cleanup (2026-07-13):** `outputs/models/archive/` and `outputs/reports/archive/` (12 old models, ~50 old reports/recon/diagnostics) plus the now-superseded `_20260319`/`_20260529` files removed from both repos' live model folders, zipped to `P:\BACKUP\Archive\Spotilyzer_model_archive_2026-07-13.zip` first (66 files, 15.5 MB — nothing lost). `_20260529` itself was kept in `Spotilyzer/models/` since `active_model.txt` still points to it and removing it would leave the app without a working model.
 
 ### Current Dataset Status (2026-03-19, Session 6)
 
