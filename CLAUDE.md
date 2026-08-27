@@ -7,11 +7,11 @@ Working document for the model training sub-project of Spotilyzer.
 Doc consistency is maintained via a read-only **audit** → `ERRATA.md` → separate **fix pass** cycle, defined in `DOC_AUDIT.md`. Before fixing any defect referenced by ID (e.g. "SP-011"), read `DOC_AUDIT.md` for the rules and `ERRATA.md` for the defect. Log every fix as one line in `CHANGELOG.md`.
 
 **Created:** 2026-03-07
-**Last updated:** 2026-07-13 (Session 11: enrich_isrc.py built + verified. Kworb+Spotify Charts refresh complete (+1,250/+752 tracks, 24,170 validated total). Hyperparameter sweep confirms depth=4/col=0.6 as standing default (training.yaml corrected — it had silently drifted to depth=5/col=0.8). `depth4refresh` deployed to Spotilyzer as SLYZR 1.3, replacing `_20260529`. Old model/report clutter archived to P:\BACKUP\Archive.)
+**Last updated:** 2026-07-13 (Session 11: enrich_isrc.py built + verified. Kworb+Spotify Charts refresh complete (+1,250/+752 tracks, 24,170 validated total). Hyperparameter sweep confirms depth=4/col=0.6 as standing default (training.yaml corrected — it had silently drifted to depth=5/col=0.8). `depth4refresh` deployed to Spotilyzer as SLYZR 1.3, replacing `_20260529`. Old model/report clutter archived to <local-backup-archive>.)
 
 **Important rule:** Always update CLAUDE.md after completed steps — never write based on ongoing or planned results. Always read metrics from reports, never estimate them.
 
-**Note on AGENTS.md:** The file `AGENTS.md` in the repo root is an outdated duplicate of this CLAUDE.md (as of Session 5), created automatically for other AI assistants (OpenAI Codex etc.). It is not maintained and not under version control — this CLAUDE.md is the sole authoritative document.
+**Note on AGENTS.md:** The file `AGENTS.md` in the repo root is a point-in-time English snapshot generated from this CLAUDE.md for AI assistants other than Claude Code (last regenerated 2026-07-14). It is not continuously maintained and not under version control — this CLAUDE.md is the sole authoritative document.
 
 ---
 
@@ -20,7 +20,7 @@ Doc consistency is maintained via a read-only **audit** → `ERRATA.md` → sepa
 | | This Project | Main Project |
 |---|----------------|---------------------|
 | **Purpose** | Data acquisition, labeling, model training | GUI, CLI, analysis pipeline |
-| **Local** | `G:\Dev\source\SpotilyzerTraining` | `G:\Dev\source\Spotilyzer` |
+| **Local** | this repository | sibling checkout `../Spotilyzer` |
 | **GitHub** | `github.com/AndreasV77/SpotilyzerTraining` | `github.com/AndreasV77/Spotilyzer` |
 
 ---
@@ -72,7 +72,7 @@ Copy-Item outputs/reports/training_report_MERTv1330M_*.json ..\Spotilyzer\models
 
 ### For GUI/CLI-Related Questions
 
-→ See `G:\Dev\source\Spotilyzer\CLAUDE.md`
+→ See `CLAUDE.md` in the Spotilyzer checkout
 
 **NOT in this repo:**
 - Changing analysis pipeline
@@ -93,8 +93,8 @@ All metrics on real holdout set (20%). Dataset: validated-only. **Note:** each h
 |--------|---------|---------|-----|--------|---------|--------|
 | `MERTv1330M_depth4refresh_main+spotify_charts+kworb_validated_20260713` | 24,170 val. | 4834 | **64.3%** | 82.4% | **74.5%** | **Deployed** (depth=4/col=0.6, SLYZR 1.3) — standing default since 2026-07-13 |
 | `MERTv1330M_d3c08_main+spotify_charts+kworb_validated_20260713` | 24,170 val. | 4834 | 65.3% | 79.4% | 81.0% | Kept for manual spot-testing (depth=3/col=0.8, first ≥65% BA) — not deployed |
-| `MERTv1330M_main+spotify_charts+kworb_validated_20260529` | ~22,722 val. | 4545 | 63.0% | **86.9%** | 67.5% | Retired 2026-07-13 → `P:\BACKUP\Archive\Spotilyzer_model_20260529_retired_2026-07-13.zip` |
-| `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~22,722 val. | 4545 | **64.2%** | 82.5% | **73.5%** | Archived 2026-07-13 → `P:\BACKUP\Archive` (superseded by fresh depth=4/col=0.6 sweep, Session 11) |
+| `MERTv1330M_main+spotify_charts+kworb_validated_20260529` | ~22,722 val. | 4545 | 63.0% | **86.9%** | 67.5% | Retired 2026-07-13 → `<local-backup-archive>/Spotilyzer_model_20260529_retired_2026-07-13.zip` |
+| `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~22,722 val. | 4545 | **64.2%** | 82.5% | **73.5%** | Archived 2026-07-13 → `<local-backup-archive>` (superseded by fresh depth=4/col=0.6 sweep, Session 11) |
 | (Session 5) `MERTv1330M_main+spotify_charts+kworb_validated_20260319` | ~8960 val. | 1173 | 63.0% | 72.8% | 68.7% | Superseded — file overwritten by Session 6 retrain with same date stamp; no longer exists |
 | `MERTv1330M_main+spotify_charts_validated_20260319` | 5660 val. | 1132 | 60.9% | 55.1% | 69.2% | Predecessor |
 | `MERTv195M_main+spotify_charts_validated_20260319` | 5660 val. | 1132 | 57.4% | 47.7% | 68.7% | Predecessor |
@@ -205,11 +205,11 @@ Each chunk is evaluated as a standalone 30s clip — identical format to trainin
 | depth=4/col=0.8 | 64.7% | 82.8% | 75.2% |
 | depth=3/col=0.8 | **65.3%** (first ≥65% BA) | 79.4% | 81.0% |
 
-Confirms Session 8's monotonic depth/colsample-vs-BA trade-off, now extended one step further (depth=3 crosses the BA target but drops Hit Recall below 80% for the first time). No config displaced depth=4/col=0.6 as the standing default — depth=5/col=0.8 (the previously-deployed `_20260529`'s config) is judged a taste call (buys Hit Recall at the cost of BA/Flop Recall/confidence), not a technical improvement. Final triage (2026-07-13): kept `depth4refresh` and `d3c08` (only config crossing BA≥65%, kept for manual spot-testing on varied tracks) in `outputs/models/` and `outputs/reports/`. The other four (`d4c07`, `d4c08`, `d5c07`, plus the unlabeled depth=5/col=0.8 refresh) offered no distinct trade-off point beyond this table — archived to `P:\BACKUP\Archive\Spotilyzer_model_archive_2026-07-13_batch2.zip`.
+Confirms Session 8's monotonic depth/colsample-vs-BA trade-off, now extended one step further (depth=3 crosses the BA target but drops Hit Recall below 80% for the first time). No config displaced depth=4/col=0.6 as the standing default — depth=5/col=0.8 (the previously-deployed `_20260529`'s config) is judged a taste call (buys Hit Recall at the cost of BA/Flop Recall/confidence), not a technical improvement. Final triage (2026-07-13): kept `depth4refresh` and `d3c08` (only config crossing BA≥65%, kept for manual spot-testing on varied tracks) in `outputs/models/` and `outputs/reports/`. The other four (`d4c07`, `d4c08`, `d5c07`, plus the unlabeled depth=5/col=0.8 refresh) offered no distinct trade-off point beyond this table — archived to `<local-backup-archive>/Spotilyzer_model_archive_2026-07-13_batch2.zip`.
 
-**Deploy decision (2026-07-13):** `depth4refresh` (depth=4/col=0.6) deployed to `Spotilyzer/models/` as the new default (SLYZR 1.3), `active_model.txt` updated. `_20260529` (SLYZR 1.2, depth=5/col=0.8) retired to `P:\BACKUP\Archive\Spotilyzer_model_20260529_retired_2026-07-13.zip`. Verified end-to-end via `spotilyzer.cli.analyze` before committing (model loads, `model_id` extraction unaffected by the `depth4refresh` label in the filename, real inference produces a sane result). `d3c08` remains in `SpotilyzerTraining/outputs/models/` for manual testing, not deployed.
+**Deploy decision (2026-07-13):** `depth4refresh` (depth=4/col=0.6) deployed to `Spotilyzer/models/` as the new default (SLYZR 1.3), `active_model.txt` updated. `_20260529` (SLYZR 1.2, depth=5/col=0.8) retired to `<local-backup-archive>/Spotilyzer_model_20260529_retired_2026-07-13.zip`. Verified end-to-end via `spotilyzer.cli.analyze` before committing (model loads, `model_id` extraction unaffected by the `depth4refresh` label in the filename, real inference produces a sane result). `d3c08` remains in `SpotilyzerTraining/outputs/models/` for manual testing, not deployed.
 
-**Repo cleanup (2026-07-13):** `outputs/models/archive/` and `outputs/reports/archive/` (12 old models, ~50 old reports/recon/diagnostics) plus the now-superseded `_20260319`/`_20260529` files removed from both repos' live model folders, zipped to `P:\BACKUP\Archive\Spotilyzer_model_archive_2026-07-13.zip` first (66 files, 15.5 MB — nothing lost). `_20260529` itself was kept in `Spotilyzer/models/` since `active_model.txt` still points to it and removing it would leave the app without a working model.
+**Repo cleanup (2026-07-13):** `outputs/models/archive/` and `outputs/reports/archive/` (12 old models, ~50 old reports/recon/diagnostics) plus the now-superseded `_20260319`/`_20260529` files removed from both repos' live model folders, zipped to `<local-backup-archive>/Spotilyzer_model_archive_2026-07-13.zip` first (66 files, 15.5 MB — nothing lost). `_20260529` itself was kept in `Spotilyzer/models/` since `active_model.txt` still points to it and removing it would leave the app without a working model.
 
 ### Current Dataset Status (2026-03-19, Session 6)
 
@@ -410,7 +410,7 @@ SpotilyzerTraining/
 ## Setup
 
 ```powershell
-cd G:\Dev\source\SpotilyzerTraining
+cd <your-checkout>\SpotilyzerTraining
 
 # Virtual environment
 python -m venv .venv
@@ -429,9 +429,10 @@ Copy-Item .env.example .env
 # Then edit .env and enter LASTFM_API_KEY
 
 # Create data directory (if not yet present)
-New-Item -ItemType Directory -Force -Path "G:\Dev\SpotilyzerData\previews"
-New-Item -ItemType Directory -Force -Path "G:\Dev\SpotilyzerData\metadata"
-New-Item -ItemType Directory -Force -Path "G:\Dev\SpotilyzerData\playlists"
+$DataRoot = "D:\SpotilyzerData"   # adjust to taste
+New-Item -ItemType Directory -Force -Path "$DataRoot\previews"
+New-Item -ItemType Directory -Force -Path "$DataRoot\metadata"
+New-Item -ItemType Directory -Force -Path "$DataRoot\playlists"
 ```
 
 ---

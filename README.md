@@ -32,7 +32,7 @@ Holdout set: 4545 samples (20% from ~22,722 validated). As of 2026-05-29.
 ## Setup
 
 ```powershell
-cd G:\Dev\source\SpotilyzerTraining
+cd <your-checkout>\SpotilyzerTraining
 
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -47,9 +47,13 @@ pip install jupyter matplotlib seaborn   # optional
 Copy-Item .env.example .env
 # Edit .env: LASTFM_API_KEY=your_key
 
-New-Item -ItemType Directory -Force -Path "G:\Dev\SpotilyzerData\previews"
-New-Item -ItemType Directory -Force -Path "G:\Dev\SpotilyzerData\metadata"
-New-Item -ItemType Directory -Force -Path "G:\Dev\SpotilyzerData\datasets"
+# Data root for audio previews & metadata (10-20 GB free space needed).
+# Point this anywhere you like:
+$DataRoot = "D:\SpotilyzerData"
+
+New-Item -ItemType Directory -Force -Path "$DataRoot\previews"
+New-Item -ItemType Directory -Force -Path "$DataRoot\metadata"
+New-Item -ItemType Directory -Force -Path "$DataRoot\datasets"
 ```
 
 ---
@@ -170,3 +174,21 @@ Copy-Item outputs/reports/training_report_MERTv1330M_*_validated_*.json   ..\Spo
 ## Related Repos
 
 - [Spotilyzer](https://github.com/AndreasV77/Spotilyzer) — GUI, CLI, analysis pipeline
+
+---
+
+## License
+
+Licensed under the **PolyForm Noncommercial License 1.0.0** — see [LICENSE](LICENSE).
+
+> **Note:** PolyForm Noncommercial is a *source-available*, **not** an OSI-approved
+> open-source license. Noncommercial use (personal projects, research, teaching) is
+> permitted; **any commercial use requires a separate license.**
+> Commercial inquiries: andreasv@andreasv.de
+
+### Data & third-party terms
+
+This repository contains **code only** — no audio, no chart data, no scraped datasets.
+Anything you collect with these scripts is subject to the terms of the respective
+source (Deezer, Spotify, Last.fm, Kworb) and is **your** responsibility, not covered
+by this license. Audio previews are intended for local feature extraction only.

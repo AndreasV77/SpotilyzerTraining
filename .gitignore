@@ -45,3 +45,7 @@ scout_results_deezer/
 # OS
 .DS_Store
 Thumbs.db
+
+# Interne Arbeitsprozess-Dokumente (nicht oeffentlich)
+DOC_AUDIT.md
+ERRATA.md

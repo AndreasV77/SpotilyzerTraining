@@ -131,9 +131,9 @@ charts:
 Finalize chart expansion and define weighting system for charts.
 
 ### Context Files (read in this order)
-1. `G:\Dev\Source\SpotilyzerTraining\CLAUDE.md` — Project context
-2. `G:\Dev\Source\SpotilyzerTraining\docs\session_2026-03-17_chart_discovery.md` — This summary
-3. `G:\Dev\Source\SpotilyzerTraining\outputs\reports\cluster_analysis_20260317_200608.json` — Discovered charts with sample tracks
+1. `CLAUDE.md` — Project context
+2. `docs\session_2026-03-17_chart_discovery.md` — This summary
+3. `outputs\reports\cluster_analysis_20260317_200608.json` — Discovered charts with sample tracks
 
 ### Tasks
 
